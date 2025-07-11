@@ -7,6 +7,7 @@ export enum UserSettingRouteKey {
   System = 'system',
   Api = 'api',
   Team = 'team',
+  Role = 'role',
   Logout = 'logout',
 }
 

@@ -33,6 +33,7 @@ class UserTenantRole(StrEnum):
 class TenantPermission(StrEnum):
     ME = 'me'
     TEAM = 'team'
+    ROLE = 'role'
 
 
 class SerializedType(IntEnum):

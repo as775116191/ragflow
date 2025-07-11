@@ -1,0 +1,8 @@
+# crontab配置文件
+# 格式: 分钟 小时 日 月 星期 命令
+ 
+# 每12小时运行一次Outlook邮箱同步任务
+0 */12 * * * cd /app && python3 rag/scripts/outlook_sync.py >> /var/log/ragflow/outlook_sync.log 2>&1 
+
+# 每12小时运行一次OneDrive同步任务
+0 */12 * * * cd /app && python3 rag/scripts/onedrive_sync.py >> /var/log/ragflow/onedrive_sync.log 2>&1 

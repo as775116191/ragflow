@@ -1,8 +1,11 @@
+import { OneDriveSync } from '@/components/onedrive-sync';
+import { OutlookMailSync } from '@/components/outlook-mail-sync';
 import { DocumentParserType } from '@/constants/knowledge';
 import { useTranslate } from '@/hooks/common-hooks';
+import { useRoleList } from '@/pages/user-setting/setting-role/hooks';
 import { normFile } from '@/utils/file-util';
 import { PlusOutlined } from '@ant-design/icons';
-import { Button, Form, Input, Radio, Space, Upload } from 'antd';
+import { Button, Form, Input, Radio, Select, Space, Upload } from 'antd';
 import { FormInstance } from 'antd/lib';
 import { useEffect, useMemo, useState } from 'react';
 import {
@@ -53,10 +56,13 @@ export const ConfigurationForm = ({ form }: { form: FormInstance }) => {
   const { submitKnowledgeConfiguration, submitLoading, navigateToDataset } =
     useSubmitKnowledgeConfiguration(form);
   const { t } = useTranslate('knowledgeConfiguration');
+  const { roles } = useRoleList();
 
   const [finalParserId, setFinalParserId] = useState<DocumentParserType>();
   const knowledgeDetails = useFetchKnowledgeConfigurationOnMount(form);
   const parserId: DocumentParserType = Form.useWatch('parser_id', form);
+  const permission = Form.useWatch('permission', form);
+
   const ConfigurationComponent = useMemo(() => {
     return finalParserId
       ? ConfigurationComponentMap[finalParserId]
@@ -106,10 +112,43 @@ export const ConfigurationForm = ({ form }: { form: FormInstance }) => {
         <Radio.Group>
           <Radio value="me">{t('me')}</Radio>
           <Radio value="team">{t('team')}</Radio>
+          <Radio value="role">{t('role')}</Radio>
         </Radio.Group>
       </Form.Item>
 
+      {permission === 'role' && (
+        <Form.Item
+          name="role_ids"
+          label={t('selectRoles')}
+          tooltip={t('selectRolesTooltip')}
+          rules={[
+            {
+              required: permission === 'role',
+              message: t('pleaseSelectRoles'),
+            },
+          ]}
+        >
+          <Select
+            mode="multiple"
+            placeholder={t('selectRolesPlaceholder')}
+            style={{ width: '100%' }}
+            options={roles.map((role) => ({
+              label: role.name,
+              value: role.id,
+            }))}
+          />
+        </Form.Item>
+      )}
+
       <ConfigurationComponent></ConfigurationComponent>
+
+      <Form.Item>
+        <OutlookMailSync />
+      </Form.Item>
+
+      <Form.Item>
+        <OneDriveSync />
+      </Form.Item>
 
       <Form.Item>
         <div className={styles.buttonWrapper}>

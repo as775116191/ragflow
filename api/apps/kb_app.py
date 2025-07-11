@@ -15,6 +15,9 @@
 #
 import json
 import os
+import threading
+import asyncio
+import logging
 
 from flask import request
 from flask_login import login_required, current_user
@@ -35,7 +38,12 @@ from rag.nlp import search
 from api.constants import DATASET_NAME_LIMIT
 from rag.settings import PAGERANK_FLD
 from rag.utils.storage_factory import STORAGE_IMPL
+from api.db import TenantPermission
+from api.db.services.onedrive_sync_service import OneDriveSyncService
 
+
+# 存储正在同步的知识库ID及其同步类型
+SYNCING_KNOWLEDGE_BASES = {}  # {kb_id: {"type": "onedrive|outlook", "task": thread_obj}}
 
 @manager.route('/create', methods=['post'])  # noqa: F821
 @login_required
@@ -66,6 +74,15 @@ def create():
         if not e:
             return get_data_error_result(message="Tenant not found.")
         req["embd_id"] = t.embd_id
+        
+        # 处理权限为角色时的role_ids参数
+        permission = req.get("permission")
+        if permission == TenantPermission.ROLE.value:
+            role_ids = req.get("role_ids", [])
+            if not role_ids:
+                return get_data_error_result(
+                    message="Role IDs are required when permission is set to 'role'.")
+        
         if not KnowledgebaseService.save(**req):
             return get_data_error_result()
         return get_json_result(data={"kb_id": req["id"]})
@@ -110,6 +127,31 @@ def update():
             KnowledgebaseService.query(name=req["name"], tenant_id=current_user.id, status=StatusEnum.VALID.value)) > 1:
             return get_data_error_result(
                 message="Duplicated knowledgebase name.")
+
+        # 处理权限为角色时的role_ids参数
+        permission = req.get("permission")
+        if permission == TenantPermission.ROLE.value:
+            role_ids = req.get("role_ids", [])
+            if not role_ids:
+                return get_data_error_result(
+                    message="Role IDs are required when permission is set to 'role'.")
+        
+        # 处理Outlook邮箱同步配置
+        parser_config = req.get("parser_config", {})
+        if parser_config.get("outlook_sync_enabled", False):
+            # 验证邮箱和文件夹是否填写
+            outlook_email = parser_config.get("outlook_email")
+            outlook_folder = parser_config.get("outlook_folder")
+            if not outlook_email or not outlook_folder:
+                return get_data_error_result(
+                    message="Outlook email and folder are required when sync is enabled.")
+            
+            # 不设置上次同步时间，首次同步将获取所有邮件
+        else:
+            # 保留上次同步时间记录，以便将来再次启用时使用
+            kb_parser_config = kb.parser_config or {}
+            if kb_parser_config.get("outlook_last_sync") and "outlook_last_sync" not in parser_config:
+                parser_config["outlook_last_sync"] = kb_parser_config.get("outlook_last_sync")
 
         del req["kb_id"]
         if not KnowledgebaseService.update_by_id(kb.id, req):
@@ -355,3 +397,129 @@ def delete_knowledge_graph(kb_id):
     settings.docStoreConn.delete({"knowledge_graph_kwd": ["graph", "subgraph", "entity", "relation"]}, search.index_name(kb.tenant_id), kb_id)
 
     return get_json_result(data=True)
+
+@manager.route("/sync_status", methods=["GET"])  # noqa: F821
+@login_required
+def get_sync_status():
+    """获取知识库同步状态"""
+    kb_id = request.args.get('kb_id')
+    
+    if not kb_id:
+        return get_json_result(data=SYNCING_KNOWLEDGE_BASES, message="返回所有正在同步的知识库")
+    
+    # 检查指定知识库是否正在同步
+    if kb_id in SYNCING_KNOWLEDGE_BASES:
+        return get_json_result(data={
+            "is_syncing": True,
+            "sync_type": SYNCING_KNOWLEDGE_BASES[kb_id]["type"]
+        })
+    else:
+        return get_json_result(data={"is_syncing": False})
+
+@manager.route("/trigger_sync", methods=["POST"])  # noqa: F821
+@login_required
+@validate_request("kb_id", "sync_type")
+def trigger_sync():
+    """触发单个知识库的同步"""
+    req = request.json
+    kb_id = req["kb_id"]
+    sync_type = req["sync_type"]  # onedrive 或 outlook
+    
+    # 检查知识库是否存在
+    e, kb = KnowledgebaseService.get_by_id(kb_id)
+    if not e:
+        return get_data_error_result(message="知识库不存在")
+    
+    # 检查知识库是否已启用相应同步
+    parser_config = kb.parser_config or {}
+    if sync_type == "onedrive" and not parser_config.get("onedrive_sync_enabled"):
+        return get_json_result(data=False, message="该知识库未启用OneDrive同步", code=settings.RetCode.ARGUMENT_ERROR)
+    elif sync_type == "outlook" and not parser_config.get("outlook_sync_enabled"):
+        return get_json_result(data=False, message="该知识库未启用Outlook同步", code=settings.RetCode.ARGUMENT_ERROR)
+    
+    # 检查知识库是否已在同步中
+    if kb_id in SYNCING_KNOWLEDGE_BASES:
+        return get_json_result(data=False, message=f"该知识库正在进行{SYNCING_KNOWLEDGE_BASES[kb_id]['type']}同步，请稍后再试", code=settings.RetCode.ARGUMENT_ERROR)
+    
+    # 创建后台任务执行同步
+    try:
+        if sync_type == "onedrive":
+            # 创建线程执行OneDrive同步
+            thread = threading.Thread(
+                target=_run_onedrive_sync,
+                args=(kb_id,),
+                daemon=True
+            )
+            SYNCING_KNOWLEDGE_BASES[kb_id] = {"type": "onedrive", "task": thread}
+            thread.start()
+        elif sync_type == "outlook":
+            # 创建线程执行Outlook同步
+            thread = threading.Thread(
+                target=_run_outlook_sync,
+                args=(kb_id,),
+                daemon=True
+            )
+            SYNCING_KNOWLEDGE_BASES[kb_id] = {"type": "outlook", "task": thread}
+            thread.start()
+        else:
+            return get_json_result(data=False, message="不支持的同步类型", code=settings.RetCode.ARGUMENT_ERROR)
+        
+        return get_json_result(data=True, message=f"{sync_type}同步任务已启动")
+    except Exception as e:
+        if kb_id in SYNCING_KNOWLEDGE_BASES:
+            del SYNCING_KNOWLEDGE_BASES[kb_id]
+        return server_error_response(e)
+
+@manager.route("/cancel_sync", methods=["POST"])  # noqa: F821
+@login_required
+@validate_request("kb_id")
+def cancel_sync():
+    """取消知识库同步任务"""
+    req = request.json
+    kb_id = req["kb_id"]
+    
+    if kb_id not in SYNCING_KNOWLEDGE_BASES:
+        return get_json_result(data=False, message="该知识库没有正在进行的同步任务", code=settings.RetCode.ARGUMENT_ERROR)
+    
+    # 标记任务为已取消
+    SYNCING_KNOWLEDGE_BASES[kb_id]["cancelled"] = True
+    
+    return get_json_result(data=True, message="同步任务取消请求已发送，任务将尽快结束")
+
+def _run_onedrive_sync(kb_id):
+    """在后台执行单个知识库的OneDrive同步"""
+    try:
+        # 创建事件循环
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        # 执行同步
+        loop.run_until_complete(OneDriveSyncService.sync_single_kb(kb_id))
+        loop.close()
+    except Exception as e:
+        logging.exception(f"OneDrive同步任务执行失败: {str(e)}")
+    finally:
+        # 无论成功失败，都从同步列表中移除
+        if kb_id in SYNCING_KNOWLEDGE_BASES:
+            del SYNCING_KNOWLEDGE_BASES[kb_id]
+
+def _run_outlook_sync(kb_id):
+    """在后台执行单个知识库的Outlook同步"""
+    try:
+        # 创建事件循环
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        # 执行同步 (需要实现OutlookSyncService.sync_single_kb方法)
+        # loop.run_until_complete(OutlookSyncService.sync_single_kb(kb_id))
+        
+        # 模拟同步过程
+        import time
+        time.sleep(10)
+        loop.close()
+    except Exception as e:
+        logging.exception(f"Outlook同步任务执行失败: {str(e)}")
+    finally:
+        # 无论成功失败，都从同步列表中移除
+        if kb_id in SYNCING_KNOWLEDGE_BASES:
+            del SYNCING_KNOWLEDGE_BASES[kb_id]

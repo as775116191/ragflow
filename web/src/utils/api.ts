@@ -23,6 +23,12 @@ export default {
   listTenant: `${api_host}/tenant/list`,
   agreeTenant: (tenantId: string) => `${api_host}/tenant/agree/${tenantId}`,
 
+  // user roles
+  getUserRoles: (userId?: string) =>
+    `${api_host}/role/user_roles${userId ? `?user_id=${userId}` : ''}`,
+  addUserRole: (roleId: string) => `${api_host}/role/add_user/${roleId}`,
+  removeUserRole: (roleId: string) => `${api_host}/role/remove_user/${roleId}`,
+
   // llm model
   factories_list: `${api_host}/llm/factories`,
   llm_list: `${api_host}/llm/list`,

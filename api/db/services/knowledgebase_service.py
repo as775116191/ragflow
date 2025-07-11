@@ -152,6 +152,7 @@ class KnowledgebaseService(CommonService):
             cls.model.description,
             cls.model.tenant_id,
             cls.model.permission,
+            cls.model.role_ids,
             cls.model.doc_num,
             cls.model.token_num,
             cls.model.chunk_num,
@@ -161,21 +162,36 @@ class KnowledgebaseService(CommonService):
             User.avatar.alias('tenant_avatar'),
             cls.model.update_time
         ]
+        
+        # 获取用户角色ID列表
+        from api.db.services.role_service import RoleService
+        user_roles = RoleService.get_user_roles(user_id)
+        user_role_ids = [role['id'] for role in user_roles]
+        
         if keywords:
             kbs = cls.model.select(*fields).join(User, on=(cls.model.tenant_id == User.id)).where(
-                ((cls.model.tenant_id.in_(joined_tenant_ids) & (cls.model.permission ==
-                                                                TenantPermission.TEAM.value)) | (
-                    cls.model.tenant_id == user_id))
-                & (cls.model.status == StatusEnum.VALID.value),
+                (
+                    # 用户创建的知识库
+                    (cls.model.tenant_id == user_id) |
+                    # 或 团队内共享的知识库
+                    (cls.model.tenant_id.in_(joined_tenant_ids) & 
+                     (cls.model.permission == TenantPermission.TEAM.value))
+                ) &
+                (cls.model.status == StatusEnum.VALID.value) &
                 (fn.LOWER(cls.model.name).contains(keywords.lower()))
             )
         else:
             kbs = cls.model.select(*fields).join(User, on=(cls.model.tenant_id == User.id)).where(
-                ((cls.model.tenant_id.in_(joined_tenant_ids) & (cls.model.permission ==
-                                                                TenantPermission.TEAM.value)) | (
-                    cls.model.tenant_id == user_id))
-                & (cls.model.status == StatusEnum.VALID.value)
+                (
+                    # 用户创建的知识库
+                    (cls.model.tenant_id == user_id) |
+                    # 或 团队内共享的知识库
+                    (cls.model.tenant_id.in_(joined_tenant_ids) & 
+                     (cls.model.permission == TenantPermission.TEAM.value))
+                ) &
+                (cls.model.status == StatusEnum.VALID.value)
             )
+        
         if parser_id:
             kbs = kbs.where(cls.model.parser_id == parser_id)
         if desc:
@@ -183,12 +199,68 @@ class KnowledgebaseService(CommonService):
         else:
             kbs = kbs.order_by(cls.model.getter_by(orderby).asc())
 
-        count = kbs.count()
-
+        # 获取符合基本条件的知识库列表
+        kb_list = list(kbs.dicts())
+        
+        # 处理基于角色的权限
+        role_based_kbs = []
+        if user_role_ids:
+            role_kbs = cls.model.select(*fields).join(User, on=(cls.model.tenant_id == User.id)).where(
+                (cls.model.permission == TenantPermission.ROLE.value) &
+                (cls.model.status == StatusEnum.VALID.value)
+            )
+            
+            if keywords:
+                role_kbs = role_kbs.where(fn.LOWER(cls.model.name).contains(keywords.lower()))
+                
+            if parser_id:
+                role_kbs = role_kbs.where(cls.model.parser_id == parser_id)
+                
+            role_kbs = list(role_kbs.dicts())
+            
+            # 过滤出用户有权限的基于角色的知识库
+            for kb in role_kbs:
+                kb_role_ids = kb.get('role_ids', [])
+                if not kb_role_ids:
+                    continue
+                    
+                # 检查是否为知识库创建者
+                if kb['tenant_id'] == user_id:
+                    role_based_kbs.append(kb)
+                    continue
+                    
+                # 检查用户角色与知识库角色是否有交集
+                for role_id in user_role_ids:
+                    if role_id in kb_role_ids:
+                        role_based_kbs.append(kb)
+                        break
+        
+        # 合并常规知识库列表和基于角色的知识库列表
+        all_kbs = kb_list + role_based_kbs
+        
+        # 去重（可能有重复的知识库）
+        unique_kbs = []
+        kb_ids = set()
+        for kb in all_kbs:
+            if kb['id'] not in kb_ids:
+                unique_kbs.append(kb)
+                kb_ids.add(kb['id'])
+        
+        # 重新排序
+        if desc:
+            unique_kbs.sort(key=lambda x: x.get(orderby, 0), reverse=True)
+        else:
+            unique_kbs.sort(key=lambda x: x.get(orderby, 0))
+            
+        count = len(unique_kbs)
+        
+        # 分页
         if page_number and items_per_page:
-            kbs = kbs.paginate(page_number, items_per_page)
+            start_idx = (page_number - 1) * items_per_page
+            end_idx = start_idx + items_per_page
+            unique_kbs = unique_kbs[start_idx:end_idx]
 
-        return list(kbs.dicts()), count
+        return unique_kbs, count
 
     @classmethod
     @DB.connection_context()
@@ -221,6 +293,7 @@ class KnowledgebaseService(CommonService):
             cls.model.language,
             cls.model.description,
             cls.model.permission,
+            cls.model.role_ids,
             cls.model.doc_num,
             cls.model.token_num,
             cls.model.chunk_num,
@@ -364,13 +437,59 @@ class KnowledgebaseService(CommonService):
         #     user_id: User ID
         # Returns:
         #     Boolean indicating accessibility
-        docs = cls.model.select(
-            cls.model.id).join(UserTenant, on=(UserTenant.tenant_id == Knowledgebase.tenant_id)
-                               ).where(cls.model.id == kb_id, UserTenant.user_id == user_id).paginate(0, 1)
-        docs = docs.dicts()
-        if not docs:
+        
+        # 首先检查是否为知识库创建者，创建者必定有访问权限
+        is_creator = cls.model.select(cls.model.id).where(
+            cls.model.id == kb_id, 
+            cls.model.created_by == user_id, 
+            cls.model.status == StatusEnum.VALID.value
+        ).exists()
+        
+        if is_creator:
+            return True
+        
+        # 获取知识库详细信息
+        e, kb = cls.get_by_id(kb_id)
+        if not e:
             return False
-        return True
+            
+        # 检查权限设置
+        if kb.permission == TenantPermission.ME.value:
+            # 私有知识库，只有创建者有权限
+            return False
+        elif kb.permission == TenantPermission.TEAM.value:
+            # 团队知识库，检查用户是否在团队中
+            docs = cls.model.select(cls.model.id).join(
+                UserTenant, on=(UserTenant.tenant_id == Knowledgebase.tenant_id)
+            ).where(
+                cls.model.id == kb_id, 
+                UserTenant.user_id == user_id,
+                cls.model.status == StatusEnum.VALID.value,
+                UserTenant.status == StatusEnum.VALID.value
+            ).exists()
+            return docs
+        elif kb.permission == TenantPermission.ROLE.value:
+            # 基于角色的权限检查
+            from api.db.services.role_service import RoleService
+            
+            # 获取知识库关联的角色ID列表
+            role_ids = kb.role_ids if hasattr(kb, 'role_ids') and kb.role_ids else []
+            
+            if not role_ids:
+                return False
+                
+            # 获取用户所有角色
+            user_roles = RoleService.get_user_roles(user_id)
+            user_role_ids = [role['id'] for role in user_roles]
+            
+            # 检查用户的角色是否与知识库允许的角色有交集
+            for role_id in role_ids:
+                if role_id in user_role_ids:
+                    return True
+            
+            return False
+        
+        return False
 
     @classmethod
     @DB.connection_context()
@@ -442,4 +561,17 @@ class KnowledgebaseService(CommonService):
                 pass # that's OK
             else:
                 raise e
+
+    @classmethod
+    @DB.connection_context()
+    def get_delta_link(cls, kb_id):
+        kb = cls.model.get_or_none(cls.model.id == kb_id)
+        if kb:
+            return kb.delta_link
+        return None
+
+    @classmethod
+    @DB.connection_context()
+    def update_delta_link(cls, kb_id, delta_link):
+        return cls.model.update({cls.model.delta_link: delta_link}).where(cls.model.id == kb_id).execute()
 

@@ -31,6 +31,14 @@ export PYTHONPATH=$(pwd)
 export LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu/
 JEMALLOC_PATH=$(pkg-config --variable=libdir jemalloc)/libjemalloc.so
 
+# 检查jemalloc库是否存在
+if [ ! -f $JEMALLOC_PATH ]; then
+    echo "WARNING: jemalloc library not found at $JEMALLOC_PATH, performance may be degraded"
+    JEMALLOC_PATH=""
+else
+    JEMALLOC_PATH="LD_PRELOAD=$JEMALLOC_PATH"
+fi
+
 PY=python3
 
 # Set default number of workers if WS is not set or less than 1
@@ -124,6 +132,17 @@ done
 # Start the main server
 run_server &
 PIDS+=($!)
+
+# 确保日志目录存在
+mkdir -p /var/log/ragflow
+
+# 安装crontab任务
+if [ -f docker/crontab.txt ]; then
+    echo "Installing crontab tasks from docker/crontab.txt..."
+    crontab docker/crontab.txt
+    service cron start || crond start || echo "Failed to start cron service"
+    echo "Crontab service started"
+fi
 
 # Wait for all background processes to finish
 wait

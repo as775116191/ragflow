@@ -190,6 +190,28 @@ class UserTenantService(CommonService):
 
     @classmethod
     @DB.connection_context()
+    def get_user_tenant(cls, user_id, tenant_id):
+        """Get user-tenant relationship by user ID and tenant ID.
+
+        Args:
+            user_id: The ID of the user.
+            tenant_id: The ID of the tenant.
+
+        Returns:
+            UserTenant object if found, None otherwise.
+        """
+        try:
+            user_tenant = cls.model.select().where(
+                (cls.model.tenant_id == tenant_id) & 
+                (cls.model.user_id == user_id) & 
+                (cls.model.status == StatusEnum.VALID.value)
+            ).get()
+            return user_tenant
+        except peewee.DoesNotExist:
+            return None
+
+    @classmethod
+    @DB.connection_context()
     def save(cls, **kwargs):
         if "id" not in kwargs:
             kwargs["id"] = get_uuid()

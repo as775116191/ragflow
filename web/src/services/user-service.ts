@@ -146,4 +146,14 @@ export const listTenant = () => request.get(api.listTenant);
 export const agreeTenant = (tenantId: string) =>
   request.put(api.agreeTenant(tenantId));
 
+// 用户角色相关
+export const getUserRoles = (userId?: string) =>
+  request.get(api.getUserRoles(userId));
+
+export const addUserRole = (roleId: string, userId: string) =>
+  request.post(api.addUserRole(roleId), { user_id: userId });
+
+export const removeUserRole = (roleId: string, userId: string) =>
+  request.post(api.removeUserRole(roleId), { user_id: userId });
+
 export default userService;

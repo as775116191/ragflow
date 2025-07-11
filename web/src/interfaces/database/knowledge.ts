@@ -15,6 +15,7 @@ export interface IKnowledge {
   parser_config: ParserConfig;
   parser_id: string;
   permission: string;
+  role_ids?: string[];
   similarity_threshold: number;
   status: string;
   tenant_id: string;

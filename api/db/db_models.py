@@ -592,18 +592,19 @@ class Knowledgebase(DataBaseModel):
     language = CharField(max_length=32, null=True, default="Chinese" if "zh_CN" in os.getenv("LANG", "") else "English", help_text="English|Chinese", index=True)
     description = TextField(null=True, help_text="KB description")
     embd_id = CharField(max_length=128, null=False, help_text="default embedding model ID", index=True)
-    permission = CharField(max_length=16, null=False, help_text="me|team", default="me", index=True)
+    permission = CharField(max_length=16, null=False, help_text="me|team|role", default="me", index=True)
+    role_ids = JSONField(null=True, default=[], help_text="Role IDs for permission control")
     created_by = CharField(max_length=32, null=False, index=True)
     doc_num = IntegerField(default=0, index=True)
     token_num = IntegerField(default=0, index=True)
     chunk_num = IntegerField(default=0, index=True)
     similarity_threshold = FloatField(default=0.2, index=True)
     vector_similarity_weight = FloatField(default=0.3, index=True)
-
     parser_id = CharField(max_length=32, null=False, help_text="default parser ID", default=ParserType.NAIVE.value, index=True)
     parser_config = JSONField(null=False, default={"pages": [[1, 1000000]]})
     pagerank = IntegerField(default=0, index=False)
     status = CharField(max_length=1, null=True, help_text="is it validate(0: wasted, 1: validate)", default="1", index=True)
+    delta_link = TextField(null=True, help_text="OneDrive同步用delta_link")
 
     def __str__(self):
         return self.name
@@ -631,12 +632,15 @@ class Document(DataBaseModel):
     process_begin_at = DateTimeField(null=True, index=True)
     process_duation = FloatField(default=0)
     meta_fields = JSONField(null=True, default={})
-
+    onedrive_path = CharField(max_length=512, null=True, unique=True, index=True, help_text="OneDrive文件路径")
     run = CharField(max_length=1, null=True, help_text="start to run processing or cancel.(1: run it; 2: cancel)", default="0", index=True)
     status = CharField(max_length=1, null=True, help_text="is it validate(0: wasted, 1: validate)", default="1", index=True)
 
     class Meta:
         db_table = "document"
+        indexes = (
+            ("onedrive_path", True),
+        )
 
 
 class File(DataBaseModel):
@@ -796,6 +800,50 @@ class UserCanvasVersion(DataBaseModel):
     class Meta:
         db_table = "user_canvas_version"
 
+class Role(DataBaseModel):
+    id = CharField(max_length=32, primary_key=True)
+    name = CharField(max_length=100, null=False, help_text="Role name", index=True)
+    description = TextField(null=True, help_text="Role description")
+    tenant_id = CharField(max_length=32, null=False, help_text="Tenant ID this role belongs to", index=True)
+    created_by = CharField(max_length=32, null=False, help_text="Creator user ID", index=True)
+    create_time = BigIntegerField(null=True, index=True)  # 继承自BaseModel
+    update_time = BigIntegerField(null=True, index=True)  # 继承自BaseModel
+    status = CharField(max_length=1, null=True, help_text="is it validate(0: wasted, 1: validate)", default="1", index=True)
+
+    class Meta:
+        db_table = "role"
+
+
+class RoleUser(DataBaseModel):
+    id = CharField(max_length=32, primary_key=True)
+    role_id = CharField(max_length=32, null=False, help_text="Role ID", index=True)
+    user_id = CharField(max_length=32, null=False, help_text="User ID", index=True)
+    create_time = BigIntegerField(null=True, index=True)  # 继承自BaseModel
+    status = CharField(max_length=1, null=True, help_text="is it validate(0: wasted, 1: validate)", default="1", index=True)
+
+    class Meta:
+        db_table = "role_user"
+        indexes = (
+            (('role_id', 'user_id'), True),  # 创建复合唯一索引
+        )
+
+
+class RolePermission(DataBaseModel):
+    id = CharField(max_length=32, primary_key=True)
+    role_id = CharField(max_length=32, null=False, help_text="Role ID", index=True)
+    resource_type = CharField(max_length=32, null=False, help_text="Resource type, e.g. knowledgebase", index=True)
+    resource_id = CharField(max_length=32, null=False, help_text="Resource ID", index=True)
+    resource_name = CharField(max_length=100, null=False, help_text="Resource name")
+    permission_type = CharField(max_length=16, null=False, help_text="Permission type: read, write, admin", index=True)
+    create_time = BigIntegerField(null=True, index=True)  # 继承自BaseModel
+    status = CharField(max_length=1, null=True, help_text="is it validate(0: wasted, 1: validate)", default="1", index=True)
+
+    class Meta:
+        db_table = "role_permission"
+        indexes = (
+            (('role_id', 'resource_id', 'permission_type'), True),  # 创建复合唯一索引
+        )
+
 
 def migrate_db():
     migrator = DatabaseMigrator[settings.DATABASE_TYPE.upper()].value(DB)
@@ -856,7 +904,19 @@ def migrate_db():
     except Exception:
         pass
     try:
+        migrate(migrator.add_column("knowledgebase", "role_ids", JSONField(null=True, default=[], help_text="Role IDs for permission control")))
+    except Exception:
+        pass
+    try:
+        migrate(migrator.alter_column_type("knowledgebase", "permission", CharField(max_length=16, null=False, help_text="me|team|role", default="me", index=True)))
+    except Exception:
+        pass
+    try:
         migrate(migrator.add_column("api_token", "beta", CharField(max_length=255, null=True, index=True)))
+    except Exception:
+        pass
+    try:
+        migrate(migrator.add_column("role", "tenant_id", CharField(max_length=32, null=True, help_text="Tenant ID this role belongs to", index=True)))
     except Exception:
         pass
     try:
@@ -892,3 +952,16 @@ def migrate_db():
         migrate(migrator.add_column("llm", "is_tools", BooleanField(null=False, help_text="support tools", default=False)))
     except Exception:
         pass
+    try:
+        migrate(migrator.add_column("knowledgebase", "role_id", CharField(max_length=32, null=True, help_text="role id for permission control", index=True)))
+    except Exception:
+        pass
+    try:
+        migrate(migrator.add_column("document", "onedrive_path", CharField(max_length=512, null=True, unique=True, index=True, help_text="OneDrive文件路径")))
+    except Exception:
+        pass
+    try:
+        migrate(migrator.add_column("knowledgebase", "delta_link", TextField(null=True, help_text="OneDrive同步用delta_link")))
+    except Exception:
+        pass
+

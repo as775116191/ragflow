@@ -1,0 +1,24 @@
+.roleWrapper {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  
+  /* 确保列表正确显示 */
+  :global {
+    .ant-list-item {
+      display: flex !important;
+      align-items: center !important;
+      padding: 12px 24px !important;
+    }
+  
+    .ant-list-item-meta {
+      flex: 1 !important;
+    }
+  
+    .ant-list-item-action {
+      margin-left: 24px !important;
+    }
+  }
+  

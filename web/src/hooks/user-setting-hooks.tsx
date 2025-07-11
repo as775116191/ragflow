@@ -12,10 +12,13 @@ import {
 import { ISetLangfuseConfigRequestBody } from '@/interfaces/request/system';
 import userService, {
   addTenantUser,
+  addUserRole,
   agreeTenant,
   deleteTenantUser,
+  getUserRoles,
   listTenant,
   listTenantUser,
+  removeUserRole,
 } from '@/services/user-service';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Modal, message } from 'antd';
@@ -430,4 +433,78 @@ export const useFetchLangfuseConfig = () => {
   });
 
   return { data, loading };
+};
+
+export const useGetUserRoles = (userId?: string) => {
+  const {
+    data,
+    isLoading: loading,
+    refetch,
+  } = useQuery({
+    queryKey: ['userRoles', userId],
+    queryFn: async () => {
+      const { data } = await getUserRoles(userId);
+      return data?.data?.roles || [];
+    },
+  });
+
+  return { data, loading, refetch };
+};
+
+export const useAddUserRole = () => {
+  const queryClient = useQueryClient();
+  const { t } = useTranslation();
+
+  const {
+    data,
+    isPending: loading,
+    mutateAsync,
+  } = useMutation({
+    mutationKey: ['addUserRole'],
+    mutationFn: async ({
+      roleId,
+      userId,
+    }: {
+      roleId: string;
+      userId: string;
+    }) => {
+      const { data } = await addUserRole(roleId, userId);
+      if (data.code === 0) {
+        message.success(t('message.added'));
+        queryClient.invalidateQueries({ queryKey: ['userRoles', userId] });
+      }
+      return data?.code;
+    },
+  });
+
+  return { data, loading, addUserRole: mutateAsync };
+};
+
+export const useRemoveUserRole = () => {
+  const queryClient = useQueryClient();
+  const { t } = useTranslation();
+
+  const {
+    data,
+    isPending: loading,
+    mutateAsync,
+  } = useMutation({
+    mutationKey: ['removeUserRole'],
+    mutationFn: async ({
+      roleId,
+      userId,
+    }: {
+      roleId: string;
+      userId: string;
+    }) => {
+      const { data } = await removeUserRole(roleId, userId);
+      if (data.code === 0) {
+        message.success(t('message.removed'));
+        queryClient.invalidateQueries({ queryKey: ['userRoles', userId] });
+      }
+      return data?.code;
+    },
+  });
+
+  return { data, loading, removeUserRole: mutateAsync };
 };

@@ -23,6 +23,7 @@ from rag.nlp import rag_tokenizer, naive_merge, tokenize_chunks
 from deepdoc.parser import HtmlParser, TxtParser
 from timeit import default_timer as timer
 import io
+import numpy as np
 
 
 def chunk(
@@ -35,6 +36,7 @@ def chunk(
     **kwargs,
 ):
     """
+    处理eml邮件，包括正文和附件内容
     Only eml is supported
     """
     eng = lang.lower() == "english"  # is_english(cks)
@@ -56,26 +58,102 @@ def chunk(
         msg = BytesParser(policy=policy.default).parse(open(filename, "rb"))
 
     text_txt, html_txt = [], []
-    # get the email header info
+    # 获取邮件头信息
     for header, value in msg.items():
         text_txt.append(f"{header}: {value}")
 
-    #  get the email main info
-    def _add_content(msg, content_type):
+    # 保存内嵌图片的CID映射
+    cid_images = {}
+    
+    # 处理内嵌图片和正文内容
+    def _process_part(part):
+        content_type = part.get_content_type()
+        content_id = part.get("Content-ID")
+        content_disposition = part.get("Content-Disposition")
+        
+        # 处理内嵌图片
+        if content_id and ('image' in content_type.lower() or 
+                          (content_disposition and 'inline' in content_disposition.lower())):
+            # 提取CID，去除<>括号
+            cid = content_id.strip('<>')
+            payload = part.get_payload(decode=True)
+            cid_images[f"cid:{cid}"] = payload
+            return
+            
+        # 处理文本内容
         if content_type == "text/plain":
-            text_txt.append(
-                msg.get_payload(decode=True).decode(msg.get_content_charset())
-            )
+            text_txt.append(part.get_payload(decode=True).decode(part.get_content_charset() or 'utf-8', errors='ignore'))
         elif content_type == "text/html":
-            html_txt.append(
-                msg.get_payload(decode=True).decode(msg.get_content_charset())
-            )
+            html_txt.append(part.get_payload(decode=True).decode(part.get_content_charset() or 'utf-8', errors='ignore'))
+        # 处理多部分内容
         elif "multipart" in content_type:
-            if msg.is_multipart():
-                for part in msg.iter_parts():
-                    _add_content(part, part.get_content_type())
-
-    _add_content(msg, msg.get_content_type())
+            if part.is_multipart():
+                for subpart in part.iter_parts():
+                    _process_part(subpart)
+    
+    # 处理邮件内容
+    _process_part(msg)
+    
+    # 处理HTML中的内嵌图片
+    tenant_id = kwargs.get("tenant_id")
+    if tenant_id and html_txt and cid_images:
+        try:
+            from bs4 import BeautifulSoup
+            from api.db import LLMType
+            from api.db.services.llm_service import LLMBundle
+            from deepdoc.vision import OCR
+            from PIL import Image
+            
+            html_content = "\n".join(html_txt)
+            soup = BeautifulSoup(html_content, 'html.parser')
+            ocr = OCR()
+            
+            # 尝试加载CV模型
+            try:
+                cv_mdl = LLMBundle(tenant_id, LLMType.IMAGE2TEXT, lang=lang)
+            except Exception as e:
+                cv_mdl = None
+                if callback:
+                    callback(0.5, f"Warning: Cannot load CV model: {str(e)}")
+            
+            # 处理所有图片标签
+            for img_tag in soup.find_all('img'):
+                src = img_tag.get('src', '')
+                if src in cid_images:
+                    try:
+                        # 提取图片内容
+                        img_binary = cid_images[src]
+                        img = Image.open(io.BytesIO(img_binary)).convert('RGB')
+                        
+                        # OCR处理
+                        img_text = ""
+                        bxs = ocr(np.array(img))
+                        ocr_text = "\n".join([t[0] for _, t in bxs if t[0]])
+                        if ocr_text:
+                            img_text += f"[图片OCR文本: {ocr_text}]"
+                        
+                        # 使用CV模型描述图片
+                        if cv_mdl:
+                            img_buffer = io.BytesIO()
+                            img.save(img_buffer, format='JPEG')
+                            img_buffer.seek(0)
+                            description = cv_mdl.describe(img_buffer.read())
+                            if description:
+                                img_text += f"[图片描述: {description}]"
+                        
+                        # 替换图片标签为描述文本
+                        if img_text:
+                            img_tag.replace_with(BeautifulSoup(img_text, 'html.parser'))
+                    except Exception as e:
+                        if callback:
+                            callback(0.5, f"Warning: Error processing inline image: {str(e)}")
+            
+            # 更新处理后的HTML
+            html_txt = [str(soup)]
+        except ImportError as e:
+            logging.warning(f"无法处理内嵌图片: {str(e)}，请安装缺失的依赖库")
+        except Exception as e:
+            logging.exception(f"处理内嵌图片时出错: {str(e)}")
 
     sections = TxtParser.parser_txt("\n".join(text_txt)) + [
         (line, "") for line in HtmlParser.parser_txt("\n".join(html_txt)) if line
@@ -90,7 +168,8 @@ def chunk(
 
     main_res.extend(tokenize_chunks(chunks, doc, eng, None))
     logging.debug("naive_merge({}): {}".format(filename, timer() - st))
-    # get the attachment info
+    
+    # 处理常规附件
     for part in msg.iter_attachments():
         content_disposition = part.get("Content-Disposition")
         if content_disposition:
