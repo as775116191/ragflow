@@ -13,18 +13,28 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 #
+import asyncio
 import functools
 import json
 import logging
+import queue
 import random
+import threading
 import time
 from base64 import b64encode
 from copy import deepcopy
 from functools import wraps
 from hmac import HMAC
 from io import BytesIO
+from typing import Any, Optional, Union, Callable, Coroutine, Type
 from urllib.parse import quote, urlencode
 from uuid import uuid1
+
+import trio
+
+from api.db.db_models import MCPServer
+from rag.utils.mcp_tool_call_conn import MCPToolCallSession, close_multiple_mcp_toolcall_sessions
+
 
 import requests
 from flask import (
@@ -348,7 +358,7 @@ def get_parser_config(chunk_method, parser_config):
     if not chunk_method:
         chunk_method = "naive"
     key_mapping = {
-        "naive": {"chunk_token_num": 128, "delimiter": r"\n", "html4excel": False, "layout_recognize": "DeepDOC", "raptor": {"use_raptor": False}},
+        "naive": {"chunk_token_num": 512, "delimiter": r"\n", "html4excel": False, "layout_recognize": "DeepDOC", "raptor": {"use_raptor": False}},
         "qa": {"raptor": {"use_raptor": False}},
         "tag": None,
         "resume": None,
@@ -428,11 +438,11 @@ def verify_embedding_availability(embd_id: str, tenant_id: str) -> tuple[bool, R
     """
     Verifies availability of an embedding model for a specific tenant.
 
-    Implements a four-stage validation process:
-    1. Model identifier parsing and validation
-    2. System support verification
-    3. Tenant authorization check
-    4. Database operation error handling
+    Performs comprehensive verification through:
+    1. Identifier Parsing: Decomposes embd_id into name and factory components
+    2. System Verification: Checks model registration in LLMService
+    3. Tenant Authorization: Validates tenant-specific model assignments
+    4. Built-in Model Check: Confirms inclusion in predefined system models
 
     Args:
         embd_id (str): Unique identifier for the embedding model in format "model_name@factory"
@@ -460,14 +470,15 @@ def verify_embedding_availability(embd_id: str, tenant_id: str) -> tuple[bool, R
     """
     try:
         llm_name, llm_factory = TenantLLMService.split_model_name_and_factory(embd_id)
-        if not LLMService.query(llm_name=llm_name, fid=llm_factory, model_type="embedding"):
-            return False, get_error_argument_result(f"Unsupported model: <{embd_id}>")
+        in_llm_service = bool(LLMService.query(llm_name=llm_name, fid=llm_factory, model_type="embedding"))
 
-        # Tongyi-Qianwen is added to TenantLLM by default, but remains unusable with empty api_key
         tenant_llms = TenantLLMService.get_my_llms(tenant_id=tenant_id)
         is_tenant_model = any(llm["llm_name"] == llm_name and llm["llm_factory"] == llm_factory and llm["model_type"] == "embedding" for llm in tenant_llms)
 
         is_builtin_model = embd_id in settings.BUILTIN_EMBEDDING_MODELS
+        if not (is_builtin_model or is_tenant_model or in_llm_service):
+            return False, get_error_argument_result(f"Unsupported model: <{embd_id}>")
+
         if not (is_builtin_model or is_tenant_model):
             return False, get_error_argument_result(f"Unauthorized model: <{embd_id}>")
     except OperationalError as e:
@@ -557,3 +568,101 @@ def remap_dictionary_keys(source_data: dict, key_aliases: dict = None) -> dict:
         transformed_data[mapped_key] = value
 
     return transformed_data
+
+
+def get_mcp_tools(mcp_servers: list[MCPServer], timeout: float | int = 10) -> tuple[dict, str]:
+    results = {}
+    tool_call_sessions = []
+    try:
+        for mcp_server in mcp_servers:
+            server_key = mcp_server.id
+
+            cached_tools = mcp_server.variables.get("tools", {})
+
+            tool_call_session = MCPToolCallSession(mcp_server, mcp_server.variables)
+            tool_call_sessions.append(tool_call_session)
+
+            try:
+                tools = tool_call_session.get_tools(timeout)
+            except Exception:
+                tools = []
+
+            results[server_key] = []
+            for tool in tools:
+                tool_dict = tool.model_dump()
+                cached_tool = cached_tools.get(tool_dict["name"], {})
+
+                tool_dict["enabled"] = cached_tool.get("enabled", True)
+                results[server_key].append(tool_dict)
+
+        # PERF: blocking call to close sessions — consider moving to background thread or task queue
+        close_multiple_mcp_toolcall_sessions(tool_call_sessions)
+        return results, ""
+    except Exception as e:
+        return {}, str(e)
+
+
+TimeoutException = Union[Type[BaseException], BaseException]
+OnTimeoutCallback = Union[Callable[..., Any], Coroutine[Any, Any, Any]]
+def timeout(
+    seconds: float |int = None,
+    *,
+    exception: Optional[TimeoutException] = None,
+    on_timeout: Optional[OnTimeoutCallback] = None
+):
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            result_queue = queue.Queue(maxsize=1)
+            def target():
+                try:
+                    result = func(*args, **kwargs)
+                    result_queue.put(result)
+                except Exception as e:
+                    result_queue.put(e)
+
+            thread = threading.Thread(target=target)
+            thread.daemon = True
+            thread.start()
+
+            try:
+                result = result_queue.get(timeout=seconds)
+                if isinstance(result, Exception):
+                    raise result
+                return result
+            except queue.Empty:
+                raise TimeoutError(f"Function '{func.__name__}' timed out after {seconds} seconds")
+
+        @wraps(func)
+        async def async_wrapper(*args, **kwargs) -> Any:
+            if seconds is None:
+                return await func(*args, **kwargs)
+
+            try:
+                with trio.fail_after(seconds):
+                    return await func(*args, **kwargs)
+            except trio.TooSlowError:
+                if on_timeout is not None:
+                    if callable(on_timeout):
+                        result = on_timeout()
+                        if isinstance(result, Coroutine):
+                            return await result
+                        return result
+                    return on_timeout
+
+                if exception is None:
+                    raise TimeoutError(f"Operation timed out after {seconds} seconds")
+
+                if isinstance(exception, BaseException):
+                    raise exception
+
+                if isinstance(exception, type) and issubclass(exception, BaseException):
+                    raise exception(f"Operation timed out after {seconds} seconds")
+
+                raise RuntimeError("Invalid exception type provided")
+
+        if asyncio.iscoroutinefunction(func):
+            return async_wrapper
+        return wrapper
+    return decorator
+

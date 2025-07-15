@@ -4,10 +4,12 @@ import { cn } from '@/lib/utils';
 import { Search } from 'lucide-react';
 
 export interface InputProps
-  extends React.InputHTMLAttributes<HTMLInputElement> {}
+  extends React.InputHTMLAttributes<HTMLInputElement> {
+  value?: string | number | readonly string[] | undefined;
+}
 
 const Input = React.forwardRef<HTMLInputElement, InputProps>(
-  ({ className, type, ...props }, ref) => {
+  ({ className, type, value, ...props }, ref) => {
     return (
       <input
         type={type}
@@ -16,6 +18,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
           className,
         )}
         ref={ref}
+        value={value ?? ''}
         {...props}
       />
     );
@@ -67,4 +70,61 @@ const SearchInput = (props: InputProps) => {
   );
 };
 
+type Value = string | readonly string[] | number | undefined;
+
+export const InnerBlurInput = React.forwardRef<
+  HTMLInputElement,
+  InputProps & { value: Value; onChange(value: Value): void }
+>(({ value, onChange, ...props }, ref) => {
+  const [val, setVal] = React.useState<Value>();
+
+  const handleChange: React.ChangeEventHandler<HTMLInputElement> =
+    React.useCallback((e) => {
+      setVal(e.target.value);
+    }, []);
+
+  const handleBlur: React.FocusEventHandler<HTMLInputElement> =
+    React.useCallback(
+      (e) => {
+        onChange?.(e.target.value);
+      },
+      [onChange],
+    );
+
+  React.useEffect(() => {
+    setVal(value);
+  }, [value]);
+
+  return (
+    <Input
+      {...props}
+      value={val}
+      onBlur={handleBlur}
+      onChange={handleChange}
+      ref={ref}
+    ></Input>
+  );
+});
+
+if (process.env.NODE_ENV !== 'production') {
+  InnerBlurInput.whyDidYouRender = true;
+}
+
+export const BlurInput = React.memo(InnerBlurInput);
+
 export { ExpandedInput, Input, SearchInput };
+
+type NumberInputProps = { onChange?(value: number): void } & InputProps;
+
+export const NumberInput = ({ onChange, ...props }: NumberInputProps) => {
+  return (
+    <Input
+      type="number"
+      onChange={(ev) => {
+        const value = ev.target.value;
+        onChange?.(value === '' ? 0 : Number(value)); // convert to number
+      }}
+      {...props}
+    ></Input>
+  );
+};

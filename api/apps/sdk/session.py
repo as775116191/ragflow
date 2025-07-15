@@ -388,10 +388,10 @@ def agents_completion_openai_compatibility (tenant_id, agent_id):
     question = next((m["content"] for m in reversed(messages) if m["role"] == "user"), "")
     
     if req.get("stream", True):
-        return Response(completionOpenAI(tenant_id, agent_id, question, session_id=req.get("id", ""), stream=True), mimetype="text/event-stream")
+        return Response(completionOpenAI(tenant_id, agent_id, question, session_id=req.get("id", req.get("metadata", {}).get("id","")), stream=True), mimetype="text/event-stream")
     else:
         # For non-streaming, just return the response directly
-        response = next(completionOpenAI(tenant_id, agent_id, question, session_id=req.get("id", ""), stream=False))
+        response = next(completionOpenAI(tenant_id, agent_id, question, session_id=req.get("id", req.get("metadata", {}).get("id","")), stream=False))
         return jsonify(response)
     
 
@@ -466,6 +466,8 @@ def list_session(tenant_id, chat_id):
             message_num = 0
             while message_num < len(messages) and message_num < len(conv["reference"]):
                 if message_num != 0 and messages[message_num]["role"] != "user":
+                    if message_num >= len(conv["reference"]):
+                        break
                     chunk_list = []
                     if "chunks" in conv["reference"][message_num]:
                         chunks = conv["reference"][message_num]["chunks"]

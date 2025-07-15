@@ -39,6 +39,15 @@ const AntLanguageMap = {
   de: deDE,
 };
 
+if (process.env.NODE_ENV === 'development') {
+  const whyDidYouRender = require('@welldone-software/why-did-you-render');
+  whyDidYouRender(React, {
+    trackAllPureComponents: true,
+    trackExtraHooks: [],
+    logOnDifferentValues: true,
+  });
+}
+
 const queryClient = new QueryClient();
 
 type Locale = ConfigProviderProps['locale'];
@@ -69,7 +78,7 @@ function Root({ children }: React.PropsWithChildren) {
         }}
         locale={locale}
       >
-        <SidebarProvider>
+        <SidebarProvider className="h-full">
           <App>{children}</App>
         </SidebarProvider>
         <Sonner position={'top-right'} expand richColors closeButton></Sonner>

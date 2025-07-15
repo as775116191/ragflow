@@ -18,9 +18,9 @@
 # from beartype.claw import beartype_all  # <-- you didn't sign up for this
 # beartype_all(conf=BeartypeConf(violation_type=UserWarning))    # <-- emit warnings from all code
 
-from api.utils.log_utils import initRootLogger
+from api.utils.log_utils import init_root_logger
 from plugin import GlobalPluginManager
-initRootLogger("ragflow_server")
+init_root_logger("ragflow_server")
 
 import logging
 import os
@@ -28,7 +28,6 @@ import signal
 import sys
 import time
 import traceback
-from concurrent.futures import ThreadPoolExecutor
 import threading
 import uuid
 
@@ -44,6 +43,7 @@ from api.db.init_data import init_web_data
 from api.versions import get_ragflow_version
 from api.utils import show_configs
 from rag.settings import print_rag_settings
+from rag.utils.mcp_tool_call_conn import shutdown_all_mcp_sessions
 from rag.utils.redis_conn import RedisDistributedLock
 
 stop_event = threading.Event()
@@ -67,6 +67,7 @@ def update_progress():
 
 def signal_handler(sig, frame):
     logging.info("Received interrupt signal, shutting down...")
+    shutdown_all_mcp_sessions()
     stop_event.set()
     time.sleep(1)
     sys.exit(0)
@@ -125,8 +126,16 @@ if __name__ == '__main__':
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
 
-    thread = ThreadPoolExecutor(max_workers=1)
-    thread.submit(update_progress)
+    def delayed_start_update_progress():
+        logging.info("Starting update_progress thread (delayed)")
+        t = threading.Thread(target=update_progress, daemon=True)
+        t.start()
+
+    if RuntimeConfig.DEBUG:
+        if os.environ.get("WERKZEUG_RUN_MAIN") == "true":
+            threading.Timer(1.0, delayed_start_update_progress).start()
+    else:
+        threading.Timer(1.0, delayed_start_update_progress).start()
 
     # start http server
     try:

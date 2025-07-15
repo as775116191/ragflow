@@ -210,6 +210,7 @@ def bullets_category(sections):
     hits = [0] * len(BULLET_PATTERN)
     for i, pro in enumerate(BULLET_PATTERN):
         for sec in sections:
+            sec = sec.strip()
             for p in pro:
                 if re.match(p, sec) and not not_bullet(sec):
                     hits[i] += 1
@@ -225,15 +226,23 @@ def bullets_category(sections):
 
 
 def is_english(texts):
-    eng = 0
     if not texts:
         return False
-    for t in texts:
-        if re.match(r"[ `a-zA-Z.,':;/\"?<>!\(\)-]", t.strip()):
-            eng += 1
-    if eng / len(texts) > 0.8:
-        return True
-    return False
+
+    pattern = re.compile(r"[`a-zA-Z0-9\s.,':;/\"?<>!\(\)\-]")
+
+    if isinstance(texts, str):
+        texts = list(texts)
+    elif isinstance(texts, list):
+        texts = [t for t in texts if isinstance(t, str) and t.strip()]
+    else:
+        return False
+
+    if not texts:
+        return False
+
+    eng = sum(1 for t in texts if pattern.fullmatch(t.strip()))
+    return (eng / len(texts)) > 0.8
 
 
 def is_chinese(text):
@@ -279,12 +288,13 @@ def tokenize_chunks(chunks, doc, eng, pdf_parser=None):
 def tokenize_chunks_with_images(chunks, doc, eng, images):
     res = []
     # wrap up as es documents
-    for ck, image in zip(chunks, images):
+    for ii, (ck, image) in enumerate(zip(chunks, images)):
         if len(ck.strip()) == 0:
             continue
         logging.debug("-- {}".format(ck))
         d = copy.deepcopy(doc)
         d["image"] = image
+        add_positions(d, [[ii]*5])
         tokenize(d, ck, eng)
         res.append(d)
     return res
@@ -536,18 +546,20 @@ def naive_merge(sections, chunk_token_num=128, delimiter="\n。；！？"):
             cks[-1] += t
             tk_nums[-1] += tnum
 
+    dels = get_delimiters(delimiter)
     for sec, pos in sections:
-        add_chunk(sec, pos)
+        splited_sec = re.split(r"(%s)" % dels, sec)
+        for sub_sec in splited_sec:
+            if re.match(f"^{dels}$", sub_sec):
+                continue
+            add_chunk(sub_sec, pos)
 
     return cks
-    
+
 
 def naive_merge_with_images(texts, images, chunk_token_num=128, delimiter="\n。；！？"):
     if not texts or len(texts) != len(images):
         return [], []
-    # Enuser texts is str not tuple, if it is tuple, convert to str (get the first item)
-    if isinstance(texts[0], tuple):
-        texts = [t[0] for t in texts]
     cks = [""]
     result_images = [None]
     tk_nums = [0]
@@ -576,8 +588,23 @@ def naive_merge_with_images(texts, images, chunk_token_num=128, delimiter="\n。
                 result_images[-1] = concat_img(result_images[-1], image)
             tk_nums[-1] += tnum
 
+    dels = get_delimiters(delimiter)
     for text, image in zip(texts, images):
-        add_chunk(text, image)
+        # if text is tuple, unpack it
+        if isinstance(text, tuple):
+            text_str = text[0]
+            text_pos = text[1] if len(text) > 1 else ""
+            splited_sec = re.split(r"(%s)" % dels, text_str)
+            for sub_sec in splited_sec:
+                if re.match(f"^{dels}$", sub_sec):
+                    continue
+                add_chunk(sub_sec, image, text_pos)
+        else:
+            splited_sec = re.split(r"(%s)" % dels, text)
+            for sub_sec in splited_sec:
+                if re.match(f"^{dels}$", sub_sec):
+                    continue
+                add_chunk(sub_sec, image)
 
     return cks, result_images
 
@@ -640,8 +667,13 @@ def naive_merge_docx(sections, chunk_token_num=128, delimiter="\n。；！？"):
             images[-1] = concat_img(images[-1], image)
             tk_nums[-1] += tnum
 
+    dels = get_delimiters(delimiter)
     for sec, image in sections:
-        add_chunk(sec, image, '')
+        splited_sec = re.split(r"(%s)" % dels, sec)
+        for sub_sec in splited_sec:
+            if re.match(f"^{dels}$", sub_sec):
+                continue
+            add_chunk(sub_sec, image,"")
 
     return cks, images
 
@@ -649,3 +681,22 @@ def naive_merge_docx(sections, chunk_token_num=128, delimiter="\n。；！？"):
 def extract_between(text: str, start_tag: str, end_tag: str) -> list[str]:
     pattern = re.escape(start_tag) + r"(.*?)" + re.escape(end_tag)
     return re.findall(pattern, text, flags=re.DOTALL)
+
+
+def get_delimiters(delimiters: str):
+    dels = []
+    s = 0
+    for m in re.finditer(r"`([^`]+)`", delimiters, re.I):
+        f, t = m.span()
+        dels.append(m.group(1))
+        dels.extend(list(delimiters[s: f]))
+        s = t
+    if s < len(delimiters):
+        dels.extend(list(delimiters[s:]))
+
+    dels.sort(key=lambda x: -len(x))
+    dels = [re.escape(d) for d in dels if d]
+    dels = [d for d in dels if d]
+    dels_pattern = "|".join(dels)
+
+    return dels_pattern

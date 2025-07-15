@@ -41,11 +41,11 @@ You can start an MCP server either from source code or via Docker.
 
 ```bash
 # Launch the MCP server to work in self-host mode, run either of the following
-uv run mcp/server/server.py --host=127.0.0.1 --port=9382 --base_url=http://127.0.0.1:9380 --api_key=ragflow-xxxxx
-# uv run mcp/server/server.py --host=127.0.0.1 --port=9382 --base_url=http://127.0.0.1:9380 mode=self-host --api_key=ragflow-xxxxx
+uv run mcp/server/server.py --host=127.0.0.1 --port=9382 --base-url=http://127.0.0.1:9380 --api-key=ragflow-xxxxx
+# uv run mcp/server/server.py --host=127.0.0.1 --port=9382 --base-url=http://127.0.0.1:9380 --mode=self-host --api-key=ragflow-xxxxx
 
 # To launch the MCP server to work in host mode, run the following instead:
-# uv run mcp/server/server.py --host=127.0.0.1 --port=9382 --base_url=http://127.0.0.1:9380 mode=host
+# uv run mcp/server/server.py --host=127.0.0.1 --port=9382 --base-url=http://127.0.0.1:9380 --mode=host
 ```
 
 Where: 
@@ -56,7 +56,7 @@ Where:
 - `mode`: The launch mode.
   - `self-host`: (default) self-host mode.
   - `host`: host mode.
-- `api_key`: Required in self-host mode to authenticate the MCP server with the RAGFlow server.
+- `api_key`: Required in self-host mode to authenticate the MCP server with the RAGFlow server. See [here](../acquire_ragflow_api_key.md) for instructions on acquiring an API key.
 
 ### Launch from Docker
 
@@ -92,11 +92,11 @@ Where:
 - `mcp-mode`: The launch mode.
   - `self-host`: (default) self-host mode.
   - `host`: host mode.
-- `mcp-host-api_key`: Required in self-host mode to authenticate the MCP server with the RAGFlow server.
+- `mcp-host-api_key`: Required in self-host mode to authenticate the MCP server with the RAGFlow server. See [here](../acquire_ragflow_api_key.md) for instructions on acquiring an API key.
 
 #### 2. Launch a RAGFlow server with an MCP server
 
-Run `docker compose -f docker-compose.yml` to launch the RAGFlow server together with the MCP server.
+Run `docker compose -f docker-compose.yml up` to launch the RAGFlow server together with the MCP server.
 
 *The following ASCII art confirms a successful launch:*
 
@@ -166,7 +166,7 @@ This section is contributed by our community contributor [yiminghub2024](https:/
 3. Launch the MCP server:
 
 ```bash
-docker compose -f docker-compose.yml up -d`
+docker compose -f docker-compose.yml up -d
 ```
 
 ### Check MCP server status

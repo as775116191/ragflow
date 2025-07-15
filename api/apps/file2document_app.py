@@ -14,6 +14,8 @@
 #  limitations under the License
 #
 
+from pathlib import Path
+
 from api.db.services.file2document_service import File2DocumentService
 from api.db.services.file_service import FileService
 

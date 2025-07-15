@@ -4,6 +4,7 @@ import { useNavigate, useParams, useSearchParams } from 'umi';
 
 export enum QueryStringMap {
   KnowledgeId = 'knowledgeId',
+  id = 'id',
 }
 
 export const useNavigatePage = () => {
@@ -64,7 +65,8 @@ export const useNavigatePage = () => {
   const navigateToChunkParsedResult = useCallback(
     (id: string, knowledgeId?: string) => () => {
       navigate(
-        `${Routes.ParsedResult}/${id}?${QueryStringMap.KnowledgeId}=${knowledgeId}`,
+        // `${Routes.ParsedResult}/${id}?${QueryStringMap.KnowledgeId}=${knowledgeId}`,
+        `${Routes.ParsedResult}/chunks?id=${knowledgeId}&doc_id=${id}`,
       );
     },
     [navigate],
@@ -76,6 +78,7 @@ export const useNavigatePage = () => {
         [QueryStringMap.KnowledgeId]: searchParams.get(
           QueryStringMap.KnowledgeId,
         ),
+        [QueryStringMap.id]: searchParams.get(QueryStringMap.id),
       };
       if (queryStringKey) {
         return allQueryString[queryStringKey];
