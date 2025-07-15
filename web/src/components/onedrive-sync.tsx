@@ -3,12 +3,13 @@ import request from '@/utils/request';
 import { SyncOutlined } from '@ant-design/icons';
 import { Button, Form, Input, Switch, Tooltip, message } from 'antd';
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { DatasetConfigurationContainer } from './dataset-configuration-container';
 
 export function OneDriveSync() {
   const { t } = useTranslate('knowledgeConfiguration');
-  const { id: kbId } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
+  const kbId = searchParams.get('id');
   const [syncing, setSyncing] = useState(false);
   const [syncType, setSyncType] = useState<string | null>(null);
 
@@ -27,10 +28,14 @@ export function OneDriveSync() {
 
   // 检查同步状态
   const checkSyncStatus = async () => {
-    if (!kbId) return;
+    if (!kbId) {
+      console.log('checkSyncStatus: kbId is missing, skipping');
+      return;
+    }
 
     try {
-      const res = await request(`/api/kb/sync_status?kb_id=${kbId}`);
+      const res = await request(`/v1/api/kb/sync_status?kb_id=${kbId}`);
+      console.log('同步状态检查结果:', res);
       if (res.data?.is_syncing) {
         setSyncing(true);
         setSyncType(res.data.sync_type);
@@ -44,15 +49,21 @@ export function OneDriveSync() {
   };
 
   // 触发同步
-  const triggerSync = async () => {
-    if (!kbId) return;
+  const triggerSync = async (email?: string, folder_path?: string) => {
+    console.log('triggerSync函数被调用，参数:', { email, folder_path, kbId });
+    if (!kbId) {
+      console.log('kbId为空，退出');
+      return;
+    }
 
     try {
-      const res = await request('/api/kb/trigger_sync', {
+      const res = await request('/v1/api/kb/trigger_sync', {
         method: 'POST',
         data: {
           kb_id: kbId,
           sync_type: 'onedrive',
+          email: email,
+          folder_path: folder_path,
         },
       });
 
@@ -74,7 +85,7 @@ export function OneDriveSync() {
     if (!kbId) return;
 
     try {
-      const res = await request('/api/kb/cancel_sync', {
+      const res = await request('/v1/api/kb/cancel_sync', {
         method: 'POST',
         data: {
           kb_id: kbId,
@@ -133,7 +144,13 @@ export function OneDriveSync() {
               const email = getFieldValue(['parser_config', 'onedrive_email']);
               if (email) {
                 // 延迟触发同步，等表单保存后
-                setTimeout(() => triggerSync(), 1000);
+                setTimeout(() => {
+                  const folder_path = getFieldValue([
+                    'parser_config',
+                    'onedrive_folder_path',
+                  ]);
+                  triggerSync(email, folder_path);
+                }, 1000);
               }
             }
           };
@@ -181,6 +198,14 @@ export function OneDriveSync() {
                     <Input placeholder={t('onedriveEmailPlaceholder')} />
                   </Form.Item>
 
+                  <Form.Item
+                    label={t('onedriveFolderPath')}
+                    tooltip={t('onedriveFolderPathTip')}
+                    name={['parser_config', 'onedrive_folder_path']}
+                  >
+                    <Input placeholder={t('onedriveFolderPathPlaceholder')} />
+                  </Form.Item>
+
                   {syncing && syncType === 'onedrive' ? (
                     <Form.Item>
                       <Button
@@ -196,7 +221,23 @@ export function OneDriveSync() {
                     <Form.Item>
                       <Button
                         type="primary"
-                        onClick={triggerSync}
+                        onClick={() => {
+                          // 获取表单中的邮箱和文件夹路径值
+                          const email = getFieldValue([
+                            'parser_config',
+                            'onedrive_email',
+                          ]);
+                          const folder_path = getFieldValue([
+                            'parser_config',
+                            'onedrive_folder_path',
+                          ]);
+                          console.log('OneDrive同步按钮被点击，参数:', {
+                            email,
+                            folder_path,
+                            kbId,
+                          });
+                          triggerSync(email, folder_path);
+                        }}
                         icon={<SyncOutlined />}
                       >
                         {t('syncNow')}

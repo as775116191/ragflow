@@ -44,7 +44,8 @@ from api.db.db_models import Knowledgebase
 from api.db.services.knowledgebase_service import KnowledgebaseService
 from api.db.services.file_service import FileService
 from api.db.services.file2document_service import File2DocumentService
-from api.db import StatusEnum, FileSource
+from api.db.services.task_service import queue_tasks
+from api.db import StatusEnum, FileSource, TaskStatus
 from api.utils import get_uuid
 from api.db.services.document_service import DocumentService
 from rag.utils.storage_factory import STORAGE_IMPL
@@ -214,7 +215,7 @@ async def sync_kb_emails(kb, graph):
                         "location": storage_path,
                         "size": len(eml_data),
                         "type": "eml",
-                        "source_type": FileSource.OUTLOOK.value
+                        "source_type": FileSource.KNOWLEDGEBASE.value
                     }
                     FileService.save(**file_data)
                     
@@ -225,13 +226,13 @@ async def sync_kb_emails(kb, graph):
                         "kb_id": kb.id,
                         "parser_id": "email",  # 使用email解析器
                         "parser_config": kb.parser_config,
-                        "source_type": FileSource.OUTLOOK.value,
+                        "source_type": "outlook",
                         "type": "eml",
                         "created_by": kb.created_by,
                         "name": filename,
                         "location": storage_path,
                         "size": len(eml_data),
-                        "run": "1"  # 设置为立即处理
+                        "run": TaskStatus.UNSTART.value  # 设置为未开始状态
                     }
                     DocumentService.save(**doc_data)
                     
@@ -243,6 +244,17 @@ async def sync_kb_emails(kb, graph):
                         "kb_id": kb.id
                     }
                     File2DocumentService.save(**f2d_data)
+                    
+                    # 创建解析任务
+                    try:
+                        # 获取存储地址
+                        bucket, name = File2DocumentService.get_storage_address(doc_id=doc_id)
+                        
+                        # 创建解析任务
+                        queue_tasks(doc_data, bucket, name, 0)
+                        logger.info(f"成功创建解析任务: {filename}")
+                    except Exception as e:
+                        logger.error(f"创建解析任务失败: {str(e)}")
                     
                     email_count += 1
                     logger.info(f"成功添加邮件: {filename}")

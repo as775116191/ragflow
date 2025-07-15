@@ -896,3 +896,190 @@ def retrieval():
             return get_json_result(data=False, message='No chunk found! Check the chunk status please!',
                                    code=settings.RetCode.DATA_ERROR)
         return server_error_response(e)
+
+
+# 添加知识库同步相关的路由转发
+import threading
+import asyncio
+import logging
+
+# 导入同步状态管理
+from api.db.services.sync_state import SYNCING_KNOWLEDGE_BASES
+from api.db.services.onedrive_sync_service import OneDriveSyncService
+from api.db.services.outlook_sync_service import OutlookSyncService
+
+
+@manager.route("/kb/sync_status", methods=["GET"])  # noqa: F821
+@login_required
+def api_get_sync_status():
+    """获取知识库同步状态 (API路由转发)"""
+    kb_id = request.args.get('kb_id')
+    
+    if not kb_id:
+        return get_json_result(data=SYNCING_KNOWLEDGE_BASES, message="返回所有正在同步的知识库")
+    
+    # 检查指定知识库是否正在同步
+    if kb_id in SYNCING_KNOWLEDGE_BASES:
+        return get_json_result(data={
+            "is_syncing": True,
+            "sync_type": SYNCING_KNOWLEDGE_BASES[kb_id]["type"]
+        })
+    else:
+        return get_json_result(data={"is_syncing": False})
+
+
+@manager.route("/kb/trigger_sync", methods=["POST"])  # noqa: F821
+@login_required
+@validate_request("kb_id", "sync_type")
+def api_trigger_sync():
+    """触发单个知识库的同步 (API路由转发)"""
+    req = request.json
+    kb_id = req["kb_id"]
+    sync_type = req["sync_type"]  # onedrive 或 outlook
+    
+    # 获取可选的邮箱和文件夹参数（用于"立即同步"）
+    email = req.get("email")
+    folder_name = req.get("folder_name")  # for outlook
+    folder_path = req.get("folder_path")  # for onedrive
+    
+    # 检查知识库是否存在
+    from api.db.services.knowledgebase_service import KnowledgebaseService
+    e, kb = KnowledgebaseService.get_by_id(kb_id)
+    if not e:
+        return get_data_error_result(message="知识库不存在")
+    
+    # 在触发同步之前，先保存配置信息到知识库
+    parser_config = getattr(kb, 'parser_config', {}) or {}
+    config_updated = False
+    
+    if sync_type == "onedrive":
+        # 保存OneDrive配置
+        if email:
+            parser_config["onedrive_email"] = email
+            config_updated = True
+        if folder_path:
+            parser_config["onedrive_folder_path"] = folder_path
+            config_updated = True
+        # 启用OneDrive同步
+        parser_config["onedrive_sync_enabled"] = True
+        config_updated = True
+    elif sync_type == "outlook":
+        # 保存Outlook配置
+        if email:
+            parser_config["outlook_email"] = email
+            config_updated = True
+        if folder_name:
+            parser_config["outlook_folder"] = folder_name
+            config_updated = True
+        # 启用Outlook同步
+        parser_config["outlook_sync_enabled"] = True
+        config_updated = True
+    
+    # 如果配置有更新，保存到数据库
+    if config_updated:
+        try:
+            KnowledgebaseService.update_by_id(kb_id, {"parser_config": parser_config})
+            logging.info(f"已保存知识库 {kb_id} 的{sync_type}同步配置")
+        except Exception as e:
+            logging.error(f"保存知识库 {kb_id} 的{sync_type}同步配置失败: {str(e)}")
+            return get_json_result(data=False, message=f"保存配置失败: {str(e)}", code=settings.RetCode.SERVER_ERROR)
+    
+    # 检查知识库是否已在同步中
+    if kb_id in SYNCING_KNOWLEDGE_BASES:
+        return get_json_result(data=False, message=f"该知识库正在进行{SYNCING_KNOWLEDGE_BASES[kb_id]['type']}同步，请稍后再试", code=settings.RetCode.ARGUMENT_ERROR)
+    
+    # 创建后台任务执行同步
+    try:
+        if sync_type == "onedrive":
+            # 创建线程执行OneDrive同步
+            thread = threading.Thread(
+                target=_run_api_onedrive_sync,
+                args=(kb_id, email, folder_path),
+                daemon=True
+            )
+            SYNCING_KNOWLEDGE_BASES[kb_id] = {"type": "onedrive", "task": thread}
+            thread.start()
+        elif sync_type == "outlook":
+            # 创建线程执行Outlook同步
+            thread = threading.Thread(
+                target=_run_api_outlook_sync,
+                args=(kb_id, email, folder_name),
+                daemon=True
+            )
+            SYNCING_KNOWLEDGE_BASES[kb_id] = {"type": "outlook", "task": thread}
+            thread.start()
+        else:
+            return get_json_result(data=False, message="不支持的同步类型", code=settings.RetCode.ARGUMENT_ERROR)
+        
+        return get_json_result(data=True, message=f"{sync_type}同步任务已启动")
+    except Exception as e:
+        if kb_id in SYNCING_KNOWLEDGE_BASES:
+            del SYNCING_KNOWLEDGE_BASES[kb_id]
+        return server_error_response(e)
+
+
+@manager.route("/kb/cancel_sync", methods=["POST"])  # noqa: F821
+@login_required
+@validate_request("kb_id")
+def api_cancel_sync():
+    """取消知识库同步 (API路由转发)"""
+    req = request.json
+    kb_id = req["kb_id"]
+    
+    if kb_id not in SYNCING_KNOWLEDGE_BASES:
+        return get_json_result(data=False, message="该知识库未在同步中", code=settings.RetCode.ARGUMENT_ERROR)
+    
+    # 标记任务为取消
+    SYNCING_KNOWLEDGE_BASES[kb_id]["cancelled"] = True
+    
+    # 等待任务结束
+    import time
+    max_wait = 30  # 最多等待30秒
+    waited = 0
+    while kb_id in SYNCING_KNOWLEDGE_BASES and waited < max_wait:
+        time.sleep(1)
+        waited += 1
+    
+    return get_json_result(data=True, message="同步任务已取消")
+
+
+def _run_api_onedrive_sync(kb_id, email=None, folder_path=None):
+    """在后台执行单个知识库的OneDrive同步 (API路由)"""
+    try:
+        logging.info(f"开始执行OneDrive同步任务，知识库ID: {kb_id}")
+        # 创建事件循环
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        # 执行同步（强制同步，跳过同步开关检查）
+        loop.run_until_complete(OneDriveSyncService.sync_single_kb(kb_id, force_sync=True, email=email, folder_path=folder_path))
+        loop.close()
+        logging.info(f"OneDrive同步任务完成，知识库ID: {kb_id}")
+    except Exception as e:
+        logging.exception(f"OneDrive同步任务执行失败，知识库ID: {kb_id}, 错误: {str(e)}")
+    finally:
+        # 无论成功失败，都从同步列表中移除
+        if kb_id in SYNCING_KNOWLEDGE_BASES:
+            del SYNCING_KNOWLEDGE_BASES[kb_id]
+        logging.info(f"OneDrive同步任务结束，知识库ID: {kb_id}")
+
+
+def _run_api_outlook_sync(kb_id, email=None, folder_name=None):
+    """在后台执行单个知识库的Outlook同步 (API路由)"""
+    try:
+        logging.info(f"开始执行Outlook同步任务，知识库ID: {kb_id}")
+        # 创建事件循环
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        # 执行同步（强制同步，跳过同步开关检查）
+        loop.run_until_complete(OutlookSyncService.sync_single_kb(kb_id, force_sync=True, email=email, folder_name=folder_name))
+        loop.close()
+        logging.info(f"Outlook同步任务完成，知识库ID: {kb_id}")
+    except Exception as e:
+        logging.exception(f"Outlook同步任务执行失败，知识库ID: {kb_id}, 错误: {str(e)}")
+    finally:
+        # 无论成功失败，都从同步列表中移除
+        if kb_id in SYNCING_KNOWLEDGE_BASES:
+            del SYNCING_KNOWLEDGE_BASES[kb_id]
+        logging.info(f"Outlook同步任务结束，知识库ID: {kb_id}")

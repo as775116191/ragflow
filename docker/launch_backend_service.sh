@@ -35,8 +35,6 @@ JEMALLOC_PATH=$(pkg-config --variable=libdir jemalloc)/libjemalloc.so
 if [ ! -f $JEMALLOC_PATH ]; then
     echo "WARNING: jemalloc library not found at $JEMALLOC_PATH, performance may be degraded"
     JEMALLOC_PATH=""
-else
-    JEMALLOC_PATH="LD_PRELOAD=$JEMALLOC_PATH"
 fi
 
 PY=python3
@@ -81,7 +79,11 @@ task_exe(){
     local retry_count=0
     while ! $STOP && [ $retry_count -lt $MAX_RETRIES ]; do
         echo "Starting task_executor.py for task $task_id (Attempt $((retry_count+1)))"
-        LD_PRELOAD=$JEMALLOC_PATH $PY rag/svr/task_executor.py "$task_id"
+        if [ -n "$JEMALLOC_PATH" ]; then
+            LD_PRELOAD=$JEMALLOC_PATH $PY rag/svr/task_executor.py "$task_id"
+        else
+            $PY rag/svr/task_executor.py "$task_id"
+        fi
         EXIT_CODE=$?
         if [ $EXIT_CODE -eq 0 ]; then
             echo "task_executor.py for task $task_id exited successfully."
@@ -139,9 +141,26 @@ mkdir -p /var/log/ragflow
 # 安装crontab任务
 if [ -f docker/crontab.txt ]; then
     echo "Installing crontab tasks from docker/crontab.txt..."
-    crontab docker/crontab.txt
-    service cron start || crond start || echo "Failed to start cron service"
-    echo "Crontab service started"
+    
+    # 检查是否有crontab命令
+    if command -v crontab >/dev/null 2>&1; then
+        crontab docker/crontab.txt
+        echo "Crontab tasks installed successfully"
+    else
+        echo "WARNING: crontab command not found. Please install cron package:"
+        echo "  sudo apt update && sudo apt install -y cron"
+        echo "Skipping crontab installation for now."
+    fi
+    
+    # 检查cron服务状态
+    if systemctl is-active --quiet cron; then
+        echo "Cron service is already running"
+    else
+        echo "WARNING: Cron service is not running. You may need to start it manually:"
+        echo "  sudo systemctl start cron"
+    fi
+    
+    echo "Crontab service setup completed"
 fi
 
 # Wait for all background processes to finish

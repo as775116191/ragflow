@@ -287,7 +287,7 @@ class Graph:
             result["error"] = f"获取邮件时发生错误: {str(e)}"
             return result
 
-    async def get_messages_as_eml(self, user_id: str, folder_id: str, since_datetime: str = None):
+    async def get_messages_as_eml(self, user_id: str, folder_id: str, since_datetime: str | None = None):
         """获取指定用户特定文件夹下的全部邮件，以EML格式返回
         
         Args:
@@ -407,7 +407,7 @@ class Graph:
             print(f"获取邮件EML过程中发生错误: {str(e)}", file=sys.stderr)
             return []
             
-    async def get_messages_as_eml_by_email_and_folder(self, email: str, folder_name: str, since_datetime: str = None):
+    async def get_messages_as_eml_by_email_and_folder(self, email: str, folder_name: str, since_datetime: str | None = None):
         """根据用户邮箱和文件夹名称获取该文件夹下的所有邮件的EML格式
         
         Args:

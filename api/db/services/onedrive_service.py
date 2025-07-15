@@ -1,12 +1,13 @@
 from configparser import SectionProxy
 from azure.identity.aio import ClientSecretCredential
-from msgraph import GraphServiceClient
+from msgraph.graph_service_client import GraphServiceClient
 import aiohttp
 import sys
 import asyncio
 import base64
 import json
 import os
+from typing import Optional, Dict, Any, List, Union
 
 class OneDriveAccess:
     settings: SectionProxy
@@ -106,7 +107,7 @@ class OneDriveAccess:
             print("使用测试用户ID", file=sys.stderr)
             return "48d31887-5fad-4d73-a9f5-3c356e68a038"
     
-    async def list_drive_items(self, user_id: str, item_path: str = None):
+    async def list_drive_items(self, user_id: str, item_path: Optional[str] = None):
         """列出用户OneDrive中的项目（文件和文件夹）
         
         Args:
@@ -460,7 +461,7 @@ class OneDriveAccess:
                 "error": str(e)
             }
     
-    async def access_onedrive_by_email(self, email: str, operation: str, path: str = None, file_content: bytes = None):
+    async def access_onedrive_by_email(self, email: str, operation: str, path: Optional[str] = None, file_content: Optional[bytes] = None):
         """通过邮箱地址访问用户的OneDrive
         
         Args:
@@ -531,7 +532,7 @@ class OneDriveAccess:
             result["error"] = f"访问OneDrive时发生错误: {str(e)}"
             return result
     
-    async def get_drive_delta(self, user_id: str, delta_link: str = None):
+    async def get_drive_delta(self, user_id: str, delta_link: Optional[str] = None):
         """获取OneDrive文件变更
         
         Args:
@@ -691,7 +692,7 @@ class OneDriveAccess:
             return f"{parent_path}/{item.get('name', '')}"
         return None
     
-    async def monitor_drive_changes(self, user_id: str, interval_seconds: int = 60, callback = None, max_iterations: int = None):
+    async def monitor_drive_changes(self, user_id: str, interval_seconds: int = 60, callback = None, max_iterations: Optional[int] = None):
         """持续监控OneDrive变更
         
         Args:
@@ -720,7 +721,7 @@ class OneDriveAccess:
         print(f"初始扫描完成，获取到delta链接，将用于后续变更检测", file=sys.stderr)
         
         # 如果有回调函数，处理初始变更
-        if callback and changes.get('total_changes') > 0:
+        if callback and changes.get('total_changes', 0) > 0:
             await callback(changes)
         
         iteration = 0
@@ -774,7 +775,7 @@ class OneDriveAccess:
         
         print("OneDrive变更监控已终止", file=sys.stderr)
     
-    async def monitor_drive_changes_by_email(self, email: str, interval_seconds: int = 60, callback = None, max_iterations: int = None):
+    async def monitor_drive_changes_by_email(self, email: str, interval_seconds: int = 60, callback = None, max_iterations: Optional[int] = None):
         """通过邮箱地址持续监控用户的OneDrive变更
         
         Args:
@@ -814,7 +815,7 @@ class OneDriveAccess:
             result["error"] = f"监控OneDrive变更时发生错误: {str(e)}"
             return result
             
-    async def get_folder_content_recursive(self, user_id: str, folder_path: str = None):
+    async def get_folder_content_recursive(self, user_id: str, folder_path: Optional[str] = None):
         """递归获取文件夹内容，包括所有子文件夹中的文件
         
         Args:
@@ -872,7 +873,7 @@ class OneDriveAccess:
                 "error": str(e)
             }
     
-    async def get_all_files_by_email_and_folder(self, email: str, folder_path: str = None):
+    async def get_all_files_by_email_and_folder(self, email: str, folder_path: Optional[str] = None):
         """根据用户邮箱和文件夹路径，递归获取该文件夹下的所有文件
         
         Args:
@@ -924,7 +925,7 @@ class OneDriveAccess:
             result["error"] = f"获取所有文件时发生错误: {str(e)}"
             return result
     
-    async def get_drive_delta_by_email(self, email: str, delta_link: str = None):
+    async def get_drive_delta_by_email(self, email: str, delta_link: Optional[str] = None):
         """通过邮箱获取OneDrive增量变化
         Args:
             email: 用户邮箱

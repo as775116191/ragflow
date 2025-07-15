@@ -1,46 +1,58 @@
-import {
-    ApiIcon,
-    LogOutIcon,
-    ModelProviderIcon,
-    PasswordIcon,
-    ProfileIcon,
-    TeamIcon,
-  } from '@/assets/icon/Icon';
-  import { LLMFactory } from '@/constants/llm';
-  import { UserSettingRouteKey } from '@/constants/setting';
-  import { MonitorOutlined, UserSwitchOutlined } from '@ant-design/icons';
-  
-  export const UserSettingIconMap = {
-    [UserSettingRouteKey.Profile]: <ProfileIcon />,
-    [UserSettingRouteKey.Password]: <PasswordIcon />,
-    [UserSettingRouteKey.Model]: <ModelProviderIcon />,
-    [UserSettingRouteKey.System]: <MonitorOutlined style={{ fontSize: 24 }} />,
-    [UserSettingRouteKey.Team]: <TeamIcon />,
-    [UserSettingRouteKey.Role]: <UserSwitchOutlined style={{ fontSize: 24 }} />,
-    [UserSettingRouteKey.Logout]: <LogOutIcon />,
-    [UserSettingRouteKey.Api]: <ApiIcon />,
-  };
-  
-  export * from '@/constants/setting';
-  
-  export const LocalLlmFactories = [
-    LLMFactory.Ollama,
-    LLMFactory.Xinference,
-    LLMFactory.LocalAI,
-    LLMFactory.LMStudio,
-    LLMFactory.OpenAiAPICompatible,
-    LLMFactory.TogetherAI,
-    LLMFactory.Replicate,
-    LLMFactory.OpenRouter,
-    LLMFactory.HuggingFace,
-    LLMFactory.GPUStack,
-    LLMFactory.ModelScope,
-    LLMFactory.VLLM,
-  ];
-  
-  export enum TenantRole {
-    Owner = 'owner',
-    Invite = 'invite',
-    Normal = 'normal',
-  }
-  
+import { useTranslate } from '@/hooks/common-hooks';
+import { ArrowLeftOutlined } from '@ant-design/icons';
+import { Button, Card, Spin, Typography } from 'antd';
+import React from 'react';
+import { useRoleDetail } from '../hooks';
+
+const { Title, Text } = Typography;
+
+interface RoleDetailProps {
+  roleId: string;
+  onBack: () => void;
+}
+
+const RoleDetail: React.FC<RoleDetailProps> = ({ roleId, onBack }) => {
+  const { t } = useTranslate('setting');
+  const { loading, role } = useRoleDetail(roleId);
+
+  return (
+    <Card bordered={false}>
+      <div style={{ marginBottom: 16 }}>
+        <Button
+          type="text"
+          icon={<ArrowLeftOutlined />}
+          onClick={onBack}
+          style={{ marginBottom: 16 }}
+        >
+          {t('back')}
+        </Button>
+        <Title level={4}>{role?.name || t('roleDetail')}</Title>
+      </div>
+
+      <Spin spinning={loading}>
+        {role && (
+          <div>
+            <div style={{ marginBottom: 16 }}>
+              <Text strong>{t('name')}: </Text>
+              <Text>{role.name}</Text>
+            </div>
+            <div style={{ marginBottom: 16 }}>
+              <Text strong>{t('description')}: </Text>
+              <Text>{role.description || '-'}</Text>
+            </div>
+            <div style={{ marginBottom: 16 }}>
+              <Text strong>{t('createdTime')}: </Text>
+              <Text>{new Date(role.created_time).toLocaleString()}</Text>
+            </div>
+            <div style={{ marginBottom: 16 }}>
+              <Text strong>{t('updatedTime')}: </Text>
+              <Text>{new Date(role.updated_time).toLocaleString()}</Text>
+            </div>
+          </div>
+        )}
+      </Spin>
+    </Card>
+  );
+};
+
+export default RoleDetail;

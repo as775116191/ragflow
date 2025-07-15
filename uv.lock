@@ -1,5 +1,5 @@
 version = 1
-revision = 1
+revision = 2
 requires-python = ">=3.10, <3.13"
 resolution-markers = [
     "python_full_version >= '3.12' and sys_platform == 'darwin'",
@@ -2281,6 +2281,11 @@ wheels = [
     { url = "https://mirrors.aliyun.com/pypi/packages/41/7b/ddacf6dcebb42466abd03f368782142baa82e08fc0c1f8eaa05b4bae87d5/httpx-0.27.0-py3-none-any.whl", hash = "sha256:71d5465162c13681bff01ad59b2cc68dd838ea1f10e51574bac27103f00c91a5" },
 ]
 
+[package.optional-dependencies]
+http2 = [
+    { name = "h2" },
+]
+
 [[package]]
 name = "httpx-sse"
 version = "0.4.0"
@@ -3023,6 +3028,99 @@ wheels = [
 ]
 
 [[package]]
+name = "microsoft-kiota-abstractions"
+version = "1.9.4"
+source = { registry = "https://mirrors.aliyun.com/pypi/simple" }
+dependencies = [
+    { name = "opentelemetry-api" },
+    { name = "opentelemetry-sdk" },
+    { name = "std-uritemplate" },
+]
+sdist = { url = "https://mirrors.aliyun.com/pypi/packages/13/5f/9c4cd0608e086307f3cb4d3fd8842ee69bc174dacb2ee7810da8b382565c/microsoft_kiota_abstractions-1.9.4.tar.gz", hash = "sha256:a34fb7c12f2cb98124ec65d9060e24a7fc0878626525646993c995fd262ec1b1" }
+wheels = [
+    { url = "https://mirrors.aliyun.com/pypi/packages/1c/0a/0767037cce36f9d5421ae64a7530362c32defddc2741361406861b43e00e/microsoft_kiota_abstractions-1.9.4-py3-none-any.whl", hash = "sha256:9f57a4df61d1ff3a43f72dec8ac6055e3cb5badab0e4a9c9e679359c2720aaf7" },
+]
+
+[[package]]
+name = "microsoft-kiota-authentication-azure"
+version = "1.9.4"
+source = { registry = "https://mirrors.aliyun.com/pypi/simple" }
+dependencies = [
+    { name = "aiohttp" },
+    { name = "azure-core" },
+    { name = "microsoft-kiota-abstractions" },
+    { name = "opentelemetry-api" },
+    { name = "opentelemetry-sdk" },
+]
+sdist = { url = "https://mirrors.aliyun.com/pypi/packages/53/70/02105d0f41d5742084f31226fa77e17072f5551161921b9f4a21a20c6270/microsoft_kiota_authentication_azure-1.9.4.tar.gz", hash = "sha256:a37174072265e17ea05020bf411f4e8694e5335a3aab9bb48926eb1f6ffd263d" }
+wheels = [
+    { url = "https://mirrors.aliyun.com/pypi/packages/5b/26/c2fc24eb5ab5e71dd999ec0c653d23d4d2f2cb2af94ad45d488c044b18d9/microsoft_kiota_authentication_azure-1.9.4-py3-none-any.whl", hash = "sha256:ed2f1bb3bbe165141d146f893e790bba8ded09e1001166e74e8b86d7e798ed46" },
+]
+
+[[package]]
+name = "microsoft-kiota-http"
+version = "1.9.4"
+source = { registry = "https://mirrors.aliyun.com/pypi/simple" }
+dependencies = [
+    { name = "httpx", extra = ["http2"] },
+    { name = "microsoft-kiota-abstractions" },
+    { name = "opentelemetry-api" },
+    { name = "opentelemetry-sdk" },
+]
+sdist = { url = "https://mirrors.aliyun.com/pypi/packages/74/a6/0746c11311ec6e768965bf100b89d768bce46d4b04e62a3d6cc9d57d58ea/microsoft_kiota_http-1.9.4.tar.gz", hash = "sha256:31e1d1d3686de66da2e4f89ce5c5bf58bc0041da1375798a07c95f785608a869" }
+wheels = [
+    { url = "https://mirrors.aliyun.com/pypi/packages/78/93/ef990609c7b3ba3dbecbe294dbdf1eb4e26005835c4c75e5cb2f9c442581/microsoft_kiota_http-1.9.4-py3-none-any.whl", hash = "sha256:66636be391551eb2fe947f842e4ac76832eda9822b29bf33a8aed527a9511834" },
+]
+
+[[package]]
+name = "microsoft-kiota-serialization-form"
+version = "1.9.4"
+source = { registry = "https://mirrors.aliyun.com/pypi/simple" }
+dependencies = [
+    { name = "microsoft-kiota-abstractions" },
+]
+sdist = { url = "https://mirrors.aliyun.com/pypi/packages/a2/a7/3ee2a45e39f80babb492da0178e1cfcc754ffe1e46be681bbf5b7f34ba89/microsoft_kiota_serialization_form-1.9.4.tar.gz", hash = "sha256:49b8905aee91ef480d0abf8476e66b11229dfeaea920f2db02adece8468f421a" }
+wheels = [
+    { url = "https://mirrors.aliyun.com/pypi/packages/81/9f/ad5ed8e3d66fdf379bd1d202f2ddedd675d06d2fe54e821cf17489eb4fe8/microsoft_kiota_serialization_form-1.9.4-py3-none-any.whl", hash = "sha256:90cbf72af0d795d9368e89e94ee1d390388b7006452eabf9039d90a87157c735" },
+]
+
+[[package]]
+name = "microsoft-kiota-serialization-json"
+version = "1.9.4"
+source = { registry = "https://mirrors.aliyun.com/pypi/simple" }
+dependencies = [
+    { name = "microsoft-kiota-abstractions" },
+]
+sdist = { url = "https://mirrors.aliyun.com/pypi/packages/81/8a/da12b4829ee1e46e71bb3a84fb71ad2365bed7c1b210b9e6407097da35dd/microsoft_kiota_serialization_json-1.9.4.tar.gz", hash = "sha256:ab0a8c32d6412c8ecaa591f826bd589467db758ac156c37773a970b0245f96e9" }
+wheels = [
+    { url = "https://mirrors.aliyun.com/pypi/packages/35/a7/50ad8e50b9aa4dba525149548af3830ba7ef796f021a2e0a624e45a9137a/microsoft_kiota_serialization_json-1.9.4-py3-none-any.whl", hash = "sha256:8eccee2785e0072e8ecacf2a17b77cbaa82049d7752606a92000a89c0330f89f" },
+]
+
+[[package]]
+name = "microsoft-kiota-serialization-multipart"
+version = "1.9.4"
+source = { registry = "https://mirrors.aliyun.com/pypi/simple" }
+dependencies = [
+    { name = "microsoft-kiota-abstractions" },
+]
+sdist = { url = "https://mirrors.aliyun.com/pypi/packages/15/6e/6b0b066bf168d3fef8baad0b816e42d19c87771b499d1b23899f50c27e98/microsoft_kiota_serialization_multipart-1.9.4.tar.gz", hash = "sha256:28fc64a1e5de12a3da6cc1418fc694d78bee128d6f89e8f7003841d15a6b53d9" }
+wheels = [
+    { url = "https://mirrors.aliyun.com/pypi/packages/03/b7/bdeb29a79b16f39516b7893cad6a11604a55db3ff2e542aba94ce114c169/microsoft_kiota_serialization_multipart-1.9.4-py3-none-any.whl", hash = "sha256:429d8ece208bf08f9ade58d4a4e69d8c2bcfc841c56ec36865f5b2d00fc66bc6" },
+]
+
+[[package]]
+name = "microsoft-kiota-serialization-text"
+version = "1.9.4"
+source = { registry = "https://mirrors.aliyun.com/pypi/simple" }
+dependencies = [
+    { name = "microsoft-kiota-abstractions" },
+]
+sdist = { url = "https://mirrors.aliyun.com/pypi/packages/b2/f0/ab153ad1bb78343d8920aae0ff1d4f42d6cbe14247e563c8476770f2dd1f/microsoft_kiota_serialization_text-1.9.4.tar.gz", hash = "sha256:e1605159483c77475154369b49836de85d745854771bbc5312c57e13acbba119" }
+wheels = [
+    { url = "https://mirrors.aliyun.com/pypi/packages/2d/0a/eb89cba77c8f2bd7f9777cfbc579d1d76b463cd6b2faec8239f8d67339e2/microsoft_kiota_serialization_text-1.9.4-py3-none-any.whl", hash = "sha256:0b39e52ec244795393aa08e2cc0d885d1dc4ed65367b5eee3536181de3adefe0" },
+]
+
+[[package]]
 name = "mini-racer"
 version = "0.12.4"
 source = { registry = "https://mirrors.aliyun.com/pypi/simple" }
@@ -3168,6 +3266,38 @@ dependencies = [
 sdist = { url = "https://mirrors.aliyun.com/pypi/packages/01/99/5d239b6156eddf761a636bded1118414d161bd6b7b37a9335549ed159396/msal_extensions-1.3.1.tar.gz", hash = "sha256:c5b0fd10f65ef62b5f1d62f4251d51cbcaf003fcedae8c91b040a488614be1a4" }
 wheels = [
     { url = "https://mirrors.aliyun.com/pypi/packages/5e/75/bd9b7bb966668920f06b200e84454c8f3566b102183bc55c5473d96cb2b9/msal_extensions-1.3.1-py3-none-any.whl", hash = "sha256:96d3de4d034504e969ac5e85bae8106c8373b5c6568e4c8fa7af2eca9dbe6bca" },
+]
+
+[[package]]
+name = "msgraph-core"
+version = "1.3.5"
+source = { registry = "https://mirrors.aliyun.com/pypi/simple" }
+dependencies = [
+    { name = "httpx", extra = ["http2"] },
+    { name = "microsoft-kiota-abstractions" },
+    { name = "microsoft-kiota-authentication-azure" },
+    { name = "microsoft-kiota-http" },
+]
+sdist = { url = "https://mirrors.aliyun.com/pypi/packages/c1/cf/29f4e0fd63b815cdb52cb14bfe7fb90764b857dfd5bd6332e94f2297ec24/msgraph_core-1.3.5.tar.gz", hash = "sha256:43aec9df1c011f1c6a1e14f2b5e9266c05a723ed750a5d3ea1eb0c0f1deb9975" }
+wheels = [
+    { url = "https://mirrors.aliyun.com/pypi/packages/7a/1b/dd1766af23bdbc448a16c7f1103b11f1b376cf5f1db7d323f27eff45a7c4/msgraph_core-1.3.5-py3-none-any.whl", hash = "sha256:bc496c6f99c626bc534012c6fe9afa35c37bcdce0f92acf26e4210f4ff9bb154" },
+]
+
+[[package]]
+name = "msgraph-sdk"
+version = "1.37.0"
+source = { registry = "https://mirrors.aliyun.com/pypi/simple" }
+dependencies = [
+    { name = "azure-identity" },
+    { name = "microsoft-kiota-serialization-form" },
+    { name = "microsoft-kiota-serialization-json" },
+    { name = "microsoft-kiota-serialization-multipart" },
+    { name = "microsoft-kiota-serialization-text" },
+    { name = "msgraph-core" },
+]
+sdist = { url = "https://mirrors.aliyun.com/pypi/packages/a5/97/c3da48fa964afa07f5dd644d0fca57dbf6bb6a254c6741e10e1fb1552195/msgraph_sdk-1.37.0.tar.gz", hash = "sha256:92ccafe9f3d10f92e3d24794ff77924e4cc4f03202278595d3221f8cf1220d2f" }
+wheels = [
+    { url = "https://mirrors.aliyun.com/pypi/packages/77/22/8985a3fee5ed411f12775541898b2a9d470afd230419b709b5318da84556/msgraph_sdk-1.37.0-py3-none-any.whl", hash = "sha256:e51580cb12b78984280cf3094892e254f34405c9bd6450931b0baa91d7dad8f6" },
 ]
 
 [[package]]
@@ -3674,6 +3804,46 @@ dependencies = [
 sdist = { url = "https://mirrors.aliyun.com/pypi/packages/c4/ca/5be52de5c69ecd327c16f3fc0dba82b7ffda5bbd0c0e215bdf23a4d12b12/opensearch_py-2.7.1.tar.gz", hash = "sha256:67ab76e9373669bc71da417096df59827c08369ac3795d5438c9a8be21cbd759" }
 wheels = [
     { url = "https://mirrors.aliyun.com/pypi/packages/80/8f/db678ae203d761922a73920215ea53a79faf3bb1ec6aa9511f809c8e234c/opensearch_py-2.7.1-py3-none-any.whl", hash = "sha256:5417650eba98a1c7648e502207cebf3a12beab623ffe0ebbf55f9b1b4b6e44e9" },
+]
+
+[[package]]
+name = "opentelemetry-api"
+version = "1.34.1"
+source = { registry = "https://mirrors.aliyun.com/pypi/simple" }
+dependencies = [
+    { name = "importlib-metadata" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://mirrors.aliyun.com/pypi/packages/4d/5e/94a8cb759e4e409022229418294e098ca7feca00eb3c467bb20cbd329bda/opentelemetry_api-1.34.1.tar.gz", hash = "sha256:64f0bd06d42824843731d05beea88d4d4b6ae59f9fe347ff7dfa2cc14233bbb3" }
+wheels = [
+    { url = "https://mirrors.aliyun.com/pypi/packages/a5/3a/2ba85557e8dc024c0842ad22c570418dc02c36cbd1ab4b832a93edf071b8/opentelemetry_api-1.34.1-py3-none-any.whl", hash = "sha256:b7df4cb0830d5a6c29ad0c0691dbae874d8daefa934b8b1d642de48323d32a8c" },
+]
+
+[[package]]
+name = "opentelemetry-sdk"
+version = "1.34.1"
+source = { registry = "https://mirrors.aliyun.com/pypi/simple" }
+dependencies = [
+    { name = "opentelemetry-api" },
+    { name = "opentelemetry-semantic-conventions" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://mirrors.aliyun.com/pypi/packages/6f/41/fe20f9036433da8e0fcef568984da4c1d1c771fa072ecd1a4d98779dccdd/opentelemetry_sdk-1.34.1.tar.gz", hash = "sha256:8091db0d763fcd6098d4781bbc80ff0971f94e260739aa6afe6fd379cdf3aa4d" }
+wheels = [
+    { url = "https://mirrors.aliyun.com/pypi/packages/07/1b/def4fe6aa73f483cabf4c748f4c25070d5f7604dcc8b52e962983491b29e/opentelemetry_sdk-1.34.1-py3-none-any.whl", hash = "sha256:308effad4059562f1d92163c61c8141df649da24ce361827812c40abb2a1e96e" },
+]
+
+[[package]]
+name = "opentelemetry-semantic-conventions"
+version = "0.55b1"
+source = { registry = "https://mirrors.aliyun.com/pypi/simple" }
+dependencies = [
+    { name = "opentelemetry-api" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://mirrors.aliyun.com/pypi/packages/5d/f0/f33458486da911f47c4aa6db9bda308bb80f3236c111bf848bd870c16b16/opentelemetry_semantic_conventions-0.55b1.tar.gz", hash = "sha256:ef95b1f009159c28d7a7849f5cbc71c4c34c845bb514d66adfdf1b3fff3598b3" }
+wheels = [
+    { url = "https://mirrors.aliyun.com/pypi/packages/1a/89/267b0af1b1d0ba828f0e60642b6a5116ac1fd917cde7fc02821627029bd1/opentelemetry_semantic_conventions-0.55b1-py3-none-any.whl", hash = "sha256:5da81dfdf7d52e3d37f8fe88d5e771e191de924cfff5f550ab0b8f7b2409baed" },
 ]
 
 [[package]]
@@ -4869,6 +5039,7 @@ dependencies = [
     { name = "mini-racer" },
     { name = "minio" },
     { name = "mistralai" },
+    { name = "msgraph-sdk" },
     { name = "nltk" },
     { name = "numpy" },
     { name = "ollama" },
@@ -5007,6 +5178,7 @@ requires-dist = [
     { name = "mini-racer", specifier = ">=0.12.4,<0.13.0" },
     { name = "minio", specifier = "==7.2.4" },
     { name = "mistralai", specifier = "==0.4.2" },
+    { name = "msgraph-sdk", specifier = ">=1.37.0" },
     { name = "nltk", specifier = "==3.9.1" },
     { name = "numpy", specifier = ">=1.26.0,<2.0.0" },
     { name = "ollama", specifier = "==0.2.1" },
@@ -5920,6 +6092,15 @@ wheels = [
     { url = "https://mirrors.aliyun.com/pypi/packages/fa/e1/60a652f18996a40a7410aeb7eb476c18da8a39792c7effe67f06883e9852/statsmodels-0.14.4-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:4bbb150620b53133d6cd1c5d14c28a4f85701e6c781d9b689b53681effaa655f" },
     { url = "https://mirrors.aliyun.com/pypi/packages/81/0c/2453eec3ac25e300847d9ed97f41156de145e507391ecb5ac989e111e525/statsmodels-0.14.4-cp312-cp312-musllinux_1_2_x86_64.whl", hash = "sha256:bb695c2025d122a101c2aca66d2b78813c321b60d3a7c86bb8ec4467bb53b0f9" },
     { url = "https://mirrors.aliyun.com/pypi/packages/59/9a/e466a1b887a1441141e52dbcc98152f013d85076576da6eed2357f2016ae/statsmodels-0.14.4-cp312-cp312-win_amd64.whl", hash = "sha256:7f7917a51766b4e074da283c507a25048ad29a18e527207883d73535e0dc6184" },
+]
+
+[[package]]
+name = "std-uritemplate"
+version = "2.0.5"
+source = { registry = "https://mirrors.aliyun.com/pypi/simple" }
+sdist = { url = "https://mirrors.aliyun.com/pypi/packages/74/cc/f3d2e47d2fe828da95321ab0f4ac54e4a02294c86832469de33a048f6061/std_uritemplate-2.0.5.tar.gz", hash = "sha256:7703a886cce59d155c21b5acf1ad8d48db9f3322de98fa783a8396fbf35cbc06" }
+wheels = [
+    { url = "https://mirrors.aliyun.com/pypi/packages/7e/21/479d27b4597c6bf278e794ccceae40f721bc1cb0ff66a30ecb9bfb61ac9a/std_uritemplate-2.0.5-py3-none-any.whl", hash = "sha256:0f5184f8e6f315a01f92cfbed335f62f087e453e79cd586b67a724211e686c28" },
 ]
 
 [[package]]
