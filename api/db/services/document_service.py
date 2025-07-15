@@ -96,11 +96,9 @@ class DocumentService(CommonService):
         # 获取文档列表
         docs = cls.model.select().where(*conditions)
         
-        # 排序
+        # 添加后缀过滤条件
         if suffix:
             docs = docs.where(cls.model.suffix.in_(suffix))
-        else:
-            docs = docs.where(cls.model.type.in_(types))
 
         count = docs.count()
         if desc:
@@ -465,6 +463,7 @@ class DocumentService(CommonService):
                 cls.model.kb_id,
                 cls.model.parser_id,
                 cls.model.parser_config,
+                cls.model.created_by,
                 Knowledgebase.language,
                 Knowledgebase.embd_id,
                 Tenant.id.alias("tenant_id"),

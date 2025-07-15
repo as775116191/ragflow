@@ -1027,7 +1027,7 @@ def migrate_db():
         migrate(migrator.add_column("knowledgebase", "delta_link", TextField(null=True, help_text="OneDrive同步用delta_link")))
     except Exception:
         pass
-
+    try:
         migrate(migrator.add_column("mcp_server", "variables", JSONField(null=True, help_text="MCP Server variables", default=dict)))
     except Exception:
         pass
